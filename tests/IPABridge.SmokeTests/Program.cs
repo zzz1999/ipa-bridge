@@ -3,6 +3,7 @@ using System.Text.Json;
 using IPABridge.Infrastructure;
 using IPABridge.Models;
 using IPABridge.Services;
+using IPABridge.ViewModels;
 
 var fakeIpatoolMode = Environment.GetEnvironmentVariable("IPA_BRIDGE_SMOKE_FAKE_IPATOOL");
 if (fakeIpatoolMode is "download-failure" or "download-success")
@@ -121,6 +122,52 @@ deviceEnvironmentLease?.Dispose();
 Check(
     !deviceEnvironmentGate.IsBusy && gateTransitions == 2,
     "device environment gate releases once and publishes its available state");
+
+var wpfBindingSmokeExecutable = Path.ChangeExtension(
+    typeof(MainViewModel).Assembly.Location,
+    ".exe");
+var wpfBindingSmokeResultPath = Path.Combine(
+    Path.GetTempPath(),
+    $"ipa-bridge-wpf-binding-smoke-{Guid.NewGuid():N}.txt");
+ProcessResult? wpfBindingSmokeProcess = null;
+string? wpfBindingSmokeReport = null;
+Check(File.Exists(wpfBindingSmokeExecutable), "WPF application smoke executable is available");
+try
+{
+    if (File.Exists(wpfBindingSmokeExecutable))
+    {
+        using var wpfBindingSmokeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        wpfBindingSmokeProcess = await new ProcessRunner().RunAsync(
+            wpfBindingSmokeExecutable,
+            ["--wpf-binding-smoke"],
+            environment: new Dictionary<string, string>
+            {
+                ["IPA_BRIDGE_WPF_SMOKE_RESULT"] = wpfBindingSmokeResultPath
+            },
+            cancellationToken: wpfBindingSmokeTimeout.Token);
+        if (File.Exists(wpfBindingSmokeResultPath))
+        {
+            wpfBindingSmokeReport = File.ReadAllText(wpfBindingSmokeResultPath);
+        }
+    }
+}
+catch (Exception exception)
+{
+    wpfBindingSmokeReport = exception.ToString();
+}
+finally
+{
+    File.Delete(wpfBindingSmokeResultPath);
+}
+
+Check(
+    wpfBindingSmokeProcess?.IsSuccess == true,
+    "all WPF page templates complete binding evaluation");
+Check(wpfBindingSmokeReport == "PASS", "all WPF page templates load without a binding exception");
+if (wpfBindingSmokeReport is not null and not "PASS")
+{
+    Console.Error.WriteLine(wpfBindingSmokeReport);
+}
 
 const string searchOutput =
     """

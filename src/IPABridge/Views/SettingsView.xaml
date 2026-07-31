@@ -46,7 +46,7 @@
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
               <TextBox IsReadOnly="True"
-                       Text="{Binding Settings.IpatoolPath}" />
+                       Text="{Binding Settings.IpatoolPath, Mode=OneWay}" />
               <Button Grid.Column="2"
                       Style="{StaticResource SecondaryButtonStyle}"
                       Click="ChooseIpatool_OnClick"
@@ -97,7 +97,7 @@
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
               <TextBox IsReadOnly="True"
-                       Text="{Binding Settings.DeviceToolsDirectory}" />
+                       Text="{Binding Settings.DeviceToolsDirectory, Mode=OneWay}" />
               <Button Grid.Column="2"
                       Style="{StaticResource SecondaryButtonStyle}"
                       Click="ChooseDeviceTools_OnClick"
@@ -236,7 +236,7 @@
             <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="IPA download folder" />
             <TextBox Grid.Column="1"
                      IsReadOnly="True"
-                     Text="{Binding Settings.DownloadDirectory}" />
+                     Text="{Binding Settings.DownloadDirectory, Mode=OneWay}" />
             <Button Grid.Column="3"
                     Style="{StaticResource SecondaryButtonStyle}"
                     Click="ChooseDownloadDirectory_OnClick"
@@ -288,7 +288,7 @@
                          Style="{StaticResource CaptionTextStyle}"
                          Text="{Binding Settings.InstallationProgress, StringFormat={}{0:P0}}" />
             </Grid>
-            <ProgressBar Maximum="1" Value="{Binding Settings.InstallationProgress}" />
+            <ProgressBar Maximum="1" Value="{Binding Settings.InstallationProgress, Mode=OneWay}" />
           </StackPanel>
         </StackPanel>
       </Border>

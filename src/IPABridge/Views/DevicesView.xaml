@@ -224,7 +224,7 @@
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
               <TextBox IsReadOnly="True"
-                       Text="{Binding Devices.SelectedIpaPath}" />
+                       Text="{Binding Devices.SelectedIpaPath, Mode=OneWay}" />
                <Button Grid.Column="2"
                        IsEnabled="{Binding Devices.IsInstalling, Converter={StaticResource InverseBooleanConverter}}"
                        Style="{StaticResource SecondaryButtonStyle}"
@@ -268,7 +268,7 @@
                            Style="{StaticResource CaptionTextStyle}"
                            Text="{Binding Devices.InstallationProgress, StringFormat={}{0:P0}}" />
               </Grid>
-              <ProgressBar Value="{Binding Devices.InstallationProgress}" Maximum="1" />
+              <ProgressBar Value="{Binding Devices.InstallationProgress, Mode=OneWay}" Maximum="1" />
               <Border Margin="0,12,0,0"
                       Padding="10"
                       Background="#182033"
