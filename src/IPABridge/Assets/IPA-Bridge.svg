@@ -1,21 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
+  <title id="title">IPA Bridge icon</title>
+  <desc id="description">An abstract white bridge gateway on a rounded blue and violet square.</desc>
   <defs>
-    <linearGradient id="background" x1="90" y1="80" x2="930" y2="950" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#1A8CFF"/>
-      <stop offset="0.52" stop-color="#3E68F3"/>
-      <stop offset="1" stop-color="#7459E8"/>
+    <linearGradient id="background" x1="18" y1="16" x2="240" y2="242" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1A8CFF" />
+      <stop offset="0.54" stop-color="#3E68F3" />
+      <stop offset="1" stop-color="#7459E8" />
     </linearGradient>
-    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(250 180) rotate(45) scale(770)">
-      <stop stop-color="#FFFFFF" stop-opacity="0.34"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
-    </radialGradient>
+    <linearGradient id="glow" x1="22" y1="14" x2="190" y2="198" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.27" />
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+    <clipPath id="rounded-square">
+      <rect x="8" y="8" width="240" height="240" rx="57" />
+    </clipPath>
   </defs>
-  <rect x="32" y="32" width="960" height="960" rx="228" fill="url(#background)"/>
-  <rect x="32" y="32" width="960" height="960" rx="228" fill="url(#glow)"/>
-  <path d="M310 570C386 391 635 391 714 570" fill="none" stroke="#FFFFFF" stroke-width="82" stroke-linecap="round"/>
-  <path d="M313 570H711" fill="none" stroke="#FFFFFF" stroke-opacity="0.86" stroke-width="58" stroke-linecap="round"/>
-  <circle cx="300" cy="570" r="91" fill="#FFFFFF"/>
-  <circle cx="724" cy="570" r="91" fill="#FFFFFF"/>
-  <circle cx="300" cy="570" r="35" fill="#3A73F5"/>
-  <circle cx="724" cy="570" r="35" fill="#665DEB"/>
+  <rect x="8" y="8" width="240" height="240" rx="57" fill="url(#background)" />
+  <rect x="8" y="8" width="240" height="240" rx="57" fill="url(#glow)" />
+  <path d="M 120 248 L 248 128 L 248 248 Z" fill="#EAE5FF" fill-opacity="0.19" clip-path="url(#rounded-square)" />
+  <path d="M 77 184 L 116 102 M 140 102 L 179 184" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M 91 164 C 111 151, 145 151, 165 164" fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" />
 </svg>

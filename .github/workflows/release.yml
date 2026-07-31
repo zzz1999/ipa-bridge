@@ -60,6 +60,10 @@ jobs:
       - name: Restore
         run: dotnet restore .\IPABridge.sln
 
+      - name: Verify generated icon assets
+        shell: powershell
+        run: .\scripts\Generate-Icon.ps1 -Verify
+
       - name: Verify formatting
         run: dotnet format .\IPABridge.sln --no-restore --verify-no-changes
 

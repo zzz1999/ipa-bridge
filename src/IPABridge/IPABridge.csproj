@@ -23,4 +23,9 @@
     <PublishReadyToRun>false</PublishReadyToRun>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\IPA-Bridge.ico" />
+    <Resource Include="Assets\IPA-Bridge.png" />
+  </ItemGroup>
 </Project>

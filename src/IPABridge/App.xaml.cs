@@ -1,7 +1,9 @@
+using System.Buffers.Binary;
 using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using IPABridge.ViewModels;
 using IPABridge.Views;
@@ -185,6 +187,7 @@ public partial class App : Application
     private static void VerifyPrivacySurfaces(MainWindow mainWindow, PrivacyDialog privacyDialog)
     {
         mainWindow.ApplyTemplate();
+        VerifyBrandAssets(mainWindow, privacyDialog);
         if (!mainWindow.PrivacyCardButton.Focusable ||
             string.IsNullOrWhiteSpace(AutomationProperties.GetName(mainWindow.PrivacyCardButton)))
         {
@@ -221,6 +224,122 @@ public partial class App : Application
                 throw new InvalidOperationException(
                     $"The privacy dialog does not lay out at {layoutSize.Width}x{layoutSize.Height}.");
             }
+        }
+    }
+
+    private static void VerifyBrandAssets(MainWindow mainWindow, PrivacyDialog privacyDialog)
+    {
+        if (mainWindow.BrandIconImage.Source is not BitmapSource brandIcon ||
+            brandIcon.PixelWidth != 1024 ||
+            brandIcon.PixelHeight != 1024)
+        {
+            throw new InvalidOperationException(
+                "The main-window brand icon is not the embedded 1024x1024 bitmap asset.");
+        }
+
+        if (mainWindow.Icon is null || privacyDialog.Icon is null)
+        {
+            throw new InvalidOperationException(
+                "The main window and privacy dialog must both load the application icon.");
+        }
+
+        var resource = GetResourceStream(
+            new Uri("pack://application:,,,/Assets/IPA-Bridge.ico", UriKind.Absolute));
+        if (resource is null)
+        {
+            throw new InvalidOperationException("The embedded application icon resource is unavailable.");
+        }
+
+        using var iconStream = resource.Stream;
+        using var iconBuffer = new MemoryStream();
+        iconStream.CopyTo(iconBuffer);
+        VerifyApplicationIconFrames(iconBuffer.ToArray());
+    }
+
+    private static void VerifyApplicationIconFrames(byte[] iconBytes)
+    {
+        const int iconDirectoryHeaderLength = 6;
+        const int iconDirectoryEntryLength = 16;
+        int[] expectedSizes = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256];
+        byte[] pngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        byte[] imageHeaderChunkType = [(byte)'I', (byte)'H', (byte)'D', (byte)'R'];
+
+        if (iconBytes.Length < iconDirectoryHeaderLength ||
+            BinaryPrimitives.ReadUInt16LittleEndian(iconBytes.AsSpan(0, 2)) != 0 ||
+            BinaryPrimitives.ReadUInt16LittleEndian(iconBytes.AsSpan(2, 2)) != 1)
+        {
+            throw new InvalidOperationException("The embedded application icon has an invalid ICO header.");
+        }
+
+        var frameCount = BinaryPrimitives.ReadUInt16LittleEndian(iconBytes.AsSpan(4, 2));
+        if (frameCount != expectedSizes.Length)
+        {
+            throw new InvalidOperationException(
+                $"The embedded application icon has {frameCount} frames instead of {expectedSizes.Length}.");
+        }
+
+        var directoryLength = iconDirectoryHeaderLength + (frameCount * iconDirectoryEntryLength);
+        if (iconBytes.Length < directoryLength)
+        {
+            throw new InvalidOperationException("The embedded application icon directory is truncated.");
+        }
+
+        var actualSizes = new HashSet<int>();
+        var payloadRanges = new List<(long Start, long End)>();
+        for (var frameIndex = 0; frameIndex < frameCount; frameIndex++)
+        {
+            var entryOffset = iconDirectoryHeaderLength + (frameIndex * iconDirectoryEntryLength);
+            var width = iconBytes[entryOffset] == 0 ? 256 : iconBytes[entryOffset];
+            var height = iconBytes[entryOffset + 1] == 0 ? 256 : iconBytes[entryOffset + 1];
+            var bitsPerPixel = BinaryPrimitives.ReadUInt16LittleEndian(iconBytes.AsSpan(entryOffset + 6, 2));
+            var payloadLength = BinaryPrimitives.ReadUInt32LittleEndian(iconBytes.AsSpan(entryOffset + 8, 4));
+            var payloadOffset = BinaryPrimitives.ReadUInt32LittleEndian(iconBytes.AsSpan(entryOffset + 12, 4));
+
+            if (width != height || !expectedSizes.Contains(width) || !actualSizes.Add(width))
+            {
+                throw new InvalidOperationException(
+                    $"The embedded application icon has an unexpected or duplicate {width}x{height} frame.");
+            }
+
+            if (bitsPerPixel != 32)
+            {
+                throw new InvalidOperationException(
+                    $"The embedded application icon's {width}x{height} frame is not 32-bit.");
+            }
+
+            var payloadStart = (long)payloadOffset;
+            var payloadEnd = payloadStart + payloadLength;
+            if (payloadStart < directoryLength ||
+                payloadLength < 33 ||
+                payloadEnd > iconBytes.Length ||
+                payloadRanges.Any(range => payloadStart < range.End && range.Start < payloadEnd))
+            {
+                throw new InvalidOperationException(
+                    $"The embedded application icon's {width}x{height} frame has an invalid payload range.");
+            }
+
+            payloadRanges.Add((payloadStart, payloadEnd));
+            var payloadIndex = checked((int)payloadStart);
+            if (!iconBytes.AsSpan(payloadIndex, pngSignature.Length).SequenceEqual(pngSignature) ||
+                BinaryPrimitives.ReadUInt32BigEndian(iconBytes.AsSpan(payloadIndex + 8, 4)) != 13 ||
+                !iconBytes.AsSpan(payloadIndex + 12, imageHeaderChunkType.Length).SequenceEqual(imageHeaderChunkType))
+            {
+                throw new InvalidOperationException(
+                    $"The embedded application icon's {width}x{height} frame is not a valid PNG image.");
+            }
+
+            var pngWidth = BinaryPrimitives.ReadUInt32BigEndian(iconBytes.AsSpan(payloadIndex + 16, 4));
+            var pngHeight = BinaryPrimitives.ReadUInt32BigEndian(iconBytes.AsSpan(payloadIndex + 20, 4));
+            if (pngWidth != width || pngHeight != height)
+            {
+                throw new InvalidOperationException(
+                    $"The embedded application icon frame declares {width}x{height} but contains a {pngWidth}x{pngHeight} PNG.");
+            }
+        }
+
+        if (!actualSizes.SetEquals(expectedSizes))
+        {
+            throw new InvalidOperationException("The embedded application icon is missing one or more required frame sizes.");
         }
     }
 

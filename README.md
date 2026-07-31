@@ -206,11 +206,14 @@ The tool and download directories can be replaced from Settings with paths the u
 
 Build prerequisites are Windows x64, PowerShell, and the exact .NET SDK selected by [`global.json`](global.json), currently `8.0.423`.
 
+The canonical [`scripts/Generate-Icon.ps1`](scripts/Generate-Icon.ps1) pipeline generates the shared 1024-pixel PNG, matching SVG, and multi-resolution ICO used by the application header, executable, taskbar, and README. Its verification mode detects generated-asset drift without changing files.
+
 ```powershell
 git clone https://github.com/zzz1999/ipa-bridge.git
 Set-Location .\ipa-bridge
 
 dotnet restore .\IPABridge.sln
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Generate-Icon.ps1 -Verify
 dotnet build .\IPABridge.sln -c Release --no-restore
 dotnet run --project .\tests\IPABridge.SmokeTests\IPABridge.SmokeTests.csproj -c Release --no-build
 

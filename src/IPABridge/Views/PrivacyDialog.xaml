@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="Privacy &amp; Local Encryption"
+        Icon="pack://application:,,,/Assets/IPA-Bridge.ico"
         Width="570"
         Height="640"
         MinWidth="420"

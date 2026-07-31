@@ -7,6 +7,7 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:views="clr-namespace:IPABridge.Views"
         Title="IPA Bridge"
+        Icon="pack://application:,,,/Assets/IPA-Bridge.ico"
         Width="1120"
         Height="670"
         MinWidth="960"
@@ -65,20 +66,14 @@
                     Margin="18,0,0,0"
                     VerticalAlignment="Center"
                     Orientation="Horizontal">
-          <Border Width="31"
-                  Height="31"
-                  Background="{StaticResource LogoGradientBrush}"
-                  CornerRadius="9">
-            <Grid>
-              <Ellipse Width="7" Height="7" Fill="White" HorizontalAlignment="Left" Margin="7,0,0,0" />
-              <Ellipse Width="7" Height="7" Fill="White" HorizontalAlignment="Right" Margin="0,0,7,0" />
-              <Border Width="12"
-                      Height="3"
-                      Background="White"
-                      CornerRadius="2"
-                      VerticalAlignment="Center" />
-            </Grid>
-          </Border>
+          <Image x:Name="BrandIconImage"
+                 Width="31"
+                 Height="31"
+                 AutomationProperties.Name="IPA Bridge icon"
+                 RenderOptions.BitmapScalingMode="HighQuality"
+                 Source="pack://application:,,,/Assets/IPA-Bridge.png"
+                 Stretch="Uniform"
+                 SnapsToDevicePixels="True" />
           <TextBlock Margin="10,0,0,0"
                      VerticalAlignment="Center"
                      FontSize="15"
