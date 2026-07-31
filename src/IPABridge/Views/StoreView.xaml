@@ -23,7 +23,8 @@
             <ColumnDefinition Width="10" />
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
-          <TextBox Height="44"
+          <TextBox x:Name="StoreSearchBox"
+                   Height="44"
                    Text="{Binding Store.SearchQuery, UpdateSourceTrigger=PropertyChanged}">
             <TextBox.InputBindings>
               <KeyBinding Key="Enter" Command="{Binding Store.SearchCommand}" />

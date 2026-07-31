@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using IPABridge.ViewModels;
 using IPABridge.Views;
@@ -45,7 +46,12 @@ public partial class App : Application
         try
         {
             viewModel = new MainViewModel();
-            var layoutSize = new Size(1180, 760);
+            Size[] layoutSizes =
+            [
+                new Size(654, 414),
+                new Size(814, 506),
+                new Size(1180, 760)
+            ];
             FrameworkElement[] views =
             [
                 new DashboardView(),
@@ -59,9 +65,13 @@ public partial class App : Application
             {
                 view.DataContext = viewModel;
                 view.ApplyTemplate();
-                view.Measure(layoutSize);
-                view.Arrange(new Rect(layoutSize));
-                view.UpdateLayout();
+                foreach (var layoutSize in layoutSizes)
+                {
+                    view.Measure(layoutSize);
+                    view.Arrange(new Rect(layoutSize));
+                    view.UpdateLayout();
+                    VerifyLayout(view);
+                }
             }
 
             if (_wpfBindingSmokeFailure is not null)
@@ -96,6 +106,46 @@ public partial class App : Application
             {
                 Shutdown(exitCode);
             }
+        }
+    }
+
+    private static void VerifyLayout(FrameworkElement view)
+    {
+        if (view is DashboardView dashboard)
+        {
+            var contentBounds = dashboard.HeroContent
+                .TransformToAncestor(dashboard.HeroCard)
+                .TransformBounds(new Rect(dashboard.HeroContent.RenderSize));
+            var paddedTop = dashboard.HeroCard.Padding.Top;
+            var paddedBottom = dashboard.HeroCard.ActualHeight - dashboard.HeroCard.Padding.Bottom;
+
+            if (contentBounds.Top < paddedTop - 0.5 || contentBounds.Bottom > paddedBottom + 0.5)
+            {
+                throw new InvalidOperationException(
+                    $"Dashboard hero content is clipped: content={contentBounds}, padded range={paddedTop:F1}-{paddedBottom:F1}.");
+            }
+        }
+
+        if (view is StoreView store)
+        {
+            VerifyEditorViewport(store.StoreSearchBox, "App Store search input");
+            VerifyEditorViewport(store.ApplePasswordBox, "Apple Account password input");
+        }
+    }
+
+    private static void VerifyEditorViewport(Control input, string description)
+    {
+        var contentHost = input.Template.FindName("PART_ContentHost", input) as ScrollViewer;
+        if (contentHost is null)
+        {
+            throw new InvalidOperationException($"The {description} has no scrolling content host.");
+        }
+
+        if (contentHost.ViewportHeight + 0.5 < input.FontSize)
+        {
+            throw new InvalidOperationException(
+                $"The {description} editor viewport is too short: " +
+                $"viewport={contentHost.ViewportHeight:F1}, font={input.FontSize:F1}.");
         }
     }
 

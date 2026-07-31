@@ -4,7 +4,8 @@
              xmlns:models="clr-namespace:IPABridge.Models">
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="0,0,8,18">
-      <Border Height="218"
+      <Border x:Name="HeroCard"
+              MinHeight="218"
               Padding="30"
               Background="{StaticResource HeroGradientBrush}"
               CornerRadius="24"
@@ -28,7 +29,7 @@
               <ColumnDefinition Width="220" />
             </Grid.ColumnDefinitions>
 
-            <StackPanel VerticalAlignment="Center">
+            <StackPanel x:Name="HeroContent" VerticalAlignment="Center">
               <Border Width="112"
                       Margin="0,0,0,15"
                       Padding="11,5"

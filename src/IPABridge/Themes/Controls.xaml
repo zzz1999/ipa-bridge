@@ -197,7 +197,9 @@
                   BorderThickness="{TemplateBinding BorderThickness}"
                   CornerRadius="12">
             <ScrollViewer x:Name="PART_ContentHost"
-                          Margin="{TemplateBinding Padding}" />
+                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsKeyboardFocused" Value="True">
@@ -220,6 +222,7 @@
     <Setter Property="BorderBrush" Value="{StaticResource DividerBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Padding" Value="13,10" />
+    <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Template">
       <Setter.Value>
@@ -230,7 +233,9 @@
                   BorderThickness="{TemplateBinding BorderThickness}"
                   CornerRadius="12">
             <ScrollViewer x:Name="PART_ContentHost"
-                          Margin="{TemplateBinding Padding}" />
+                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsKeyboardFocused" Value="True">
