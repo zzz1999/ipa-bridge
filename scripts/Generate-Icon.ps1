@@ -274,9 +274,10 @@ try {
   <path d="M $($geometry.DeckStartX) $($geometry.DeckStartY) C $($geometry.DeckControlOneX) $($geometry.DeckControlOneY), $($geometry.DeckControlTwoX) $($geometry.DeckControlTwoY), $($geometry.DeckEndX) $($geometry.DeckEndY)" fill="none" stroke="#FFFFFF" stroke-width="$($geometry.DeckWidth)" stroke-linecap="round" />
 </svg>
 "@
+    $normalizedSvg = $svg.Replace("`r`n", "`n").Replace("`r", "`n") + "`n"
     [System.IO.File]::WriteAllText(
         $generatedSvgPath,
-        $svg + [Environment]::NewLine,
+        $normalizedSvg,
         [System.Text.UTF8Encoding]::new($false))
 
     Write-MultiResolutionIcon -Path $generatedIconPath
