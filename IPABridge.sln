@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35327.3
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IPABridge", "src\IPABridge\IPABridge.csproj", "{1462DA40-2340-4F6C-8437-5423257E4E78}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IPABridge.SmokeTests", "tests\IPABridge.SmokeTests\IPABridge.SmokeTests.csproj", "{722B1F5E-A0D3-4389-B536-53E05A1F2204}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1462DA40-2340-4F6C-8437-5423257E4E78}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1462DA40-2340-4F6C-8437-5423257E4E78}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1462DA40-2340-4F6C-8437-5423257E4E78}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1462DA40-2340-4F6C-8437-5423257E4E78}.Release|Any CPU.Build.0 = Release|Any CPU
+		{722B1F5E-A0D3-4389-B536-53E05A1F2204}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{722B1F5E-A0D3-4389-B536-53E05A1F2204}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{722B1F5E-A0D3-4389-B536-53E05A1F2204}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{722B1F5E-A0D3-4389-B536-53E05A1F2204}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

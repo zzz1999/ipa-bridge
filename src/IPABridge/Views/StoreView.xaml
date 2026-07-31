@@ -1,0 +1,286 @@
+<UserControl x:Class="IPABridge.Views.StoreView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid Margin="0,0,8,14">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition Width="18" />
+      <ColumnDefinition Width="330" />
+    </Grid.ColumnDefinitions>
+
+    <Border Style="{StaticResource CardStyle}">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="10" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBox Height="44"
+                   Text="{Binding Store.SearchQuery, UpdateSourceTrigger=PropertyChanged}">
+            <TextBox.InputBindings>
+              <KeyBinding Key="Enter" Command="{Binding Store.SearchCommand}" />
+            </TextBox.InputBindings>
+          </TextBox>
+          <Button Grid.Column="2"
+                  MinWidth="92"
+                  Style="{StaticResource PrimaryButtonStyle}"
+                  Command="{Binding Store.SearchCommand}"
+                  Content="Search Apps" />
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="1,12,1,12">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Style="{StaticResource BodyTextStyle}"
+                     Text="{Binding Store.StatusMessage}"
+                     TextTrimming="CharacterEllipsis" />
+          <StackPanel Grid.Column="1"
+                      Visibility="{Binding Store.IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}"
+                      Orientation="Horizontal">
+            <TextBlock Margin="0,0,8,0"
+                       Style="{StaticResource CaptionTextStyle}"
+                       Text="{Binding Store.OperationTitle}" />
+            <ProgressBar Width="90" IsIndeterminate="True" />
+          </StackPanel>
+        </Grid>
+
+        <ListBox Grid.Row="2"
+                 ItemsSource="{Binding Store.SearchResults}"
+                 SelectedItem="{Binding Store.SelectedApp}">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="54" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="76" />
+                </Grid.ColumnDefinitions>
+                <Border Width="44"
+                        Height="44"
+                        Background="{StaticResource HeroGradientBrush}"
+                        CornerRadius="12">
+                  <TextBlock HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             FontSize="18"
+                             FontWeight="SemiBold"
+                             Foreground="White"
+                             Text="{Binding Monogram}" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <TextBlock FontSize="14"
+                             FontWeight="SemiBold"
+                             Text="{Binding Name}"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Margin="0,3,8,0"
+                             Style="{StaticResource CaptionTextStyle}"
+                             Text="{Binding BundleIdentifier}"
+                             TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <StackPanel Grid.Column="2"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center">
+                  <TextBlock HorizontalAlignment="Right"
+                             FontSize="12"
+                             FontWeight="SemiBold"
+                             Foreground="{StaticResource AccentBrush}"
+                             Text="{Binding PriceLabel}" />
+                  <TextBlock Margin="0,3,0,0"
+                             HorizontalAlignment="Right"
+                             Style="{StaticResource CaptionTextStyle}"
+                             Text="{Binding Version}" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Border Grid.Row="3"
+                Margin="0,12,0,0"
+                Padding="15"
+                Background="#EEF3FA"
+                CornerRadius="15"
+                Visibility="{Binding Store.SelectedApp, Converter={StaticResource NullToVisibilityConverter}}">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="12" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock FontSize="14"
+                           FontWeight="SemiBold"
+                           Text="{Binding Store.SelectedApp.Name}"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock Margin="0,3,0,0"
+                           Style="{StaticResource CaptionTextStyle}"
+                           Text="The latest version is downloaded by default. You can also load version history with version numbers and release dates."
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <Button Margin="0,0,8,0"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Command="{Binding Store.LoadVersionsCommand}"
+                        Content="Load Version History" />
+                <Button Style="{StaticResource PrimaryButtonStyle}"
+                        Command="{Binding Store.DownloadCommand}"
+                        Content="Acquire &amp; Download" />
+              </StackPanel>
+            </Grid>
+
+            <Grid Grid.Row="2">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="76" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <TextBlock VerticalAlignment="Center"
+                         Style="{StaticResource CaptionTextStyle}"
+                         Text="Download version" />
+              <ComboBox Grid.Column="1"
+                        MaxDropDownHeight="360"
+                        ItemsSource="{Binding Store.Versions}"
+                        SelectedItem="{Binding Store.SelectedVersion}"
+                        IsEnabled="{Binding Store.IsBusy, Converter={StaticResource InverseBooleanConverter}}"
+                        ToolTip="Downloads the latest version when no historical version is selected">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate>
+                    <Grid MinWidth="220" Margin="0,2">
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                      </Grid.RowDefinitions>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <TextBlock FontWeight="SemiBold"
+                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                 Text="{Binding VersionLabel}" />
+                      <TextBlock Grid.Column="1"
+                                 Margin="12,0,0,0"
+                                 Style="{StaticResource CaptionTextStyle}"
+                                 Text="{Binding ReleaseDateLabel}" />
+                      <TextBlock Grid.Row="1"
+                                 Grid.ColumnSpan="2"
+                                 Margin="0,3,0,0"
+                                 Style="{StaticResource CaptionTextStyle}"
+                                 Text="{Binding IdentifierLabel}" />
+                    </Grid>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </Grid>
+          </Grid>
+        </Border>
+      </Grid>
+    </Border>
+
+    <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+          <Border Width="48"
+                  Height="48"
+                  Margin="0,0,0,15"
+                  HorizontalAlignment="Left"
+                  Background="{StaticResource AccentSoftBrush}"
+                  CornerRadius="15">
+            <TextBlock HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontFamily="{StaticResource SymbolFont}"
+                       FontSize="20"
+                       Foreground="{StaticResource AccentBrush}"
+                       Text="&#xE77B;" />
+          </Border>
+          <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Connect Apple Account" />
+          <TextBlock Margin="0,5,0,18"
+                     Style="{StaticResource BodyTextStyle}"
+                     Text="IPAs are encrypted with your account license. IPA Bridge saves the email address in local settings after a successful sign-in, but never saves the password, two-factor code, or vault passphrase in its settings."
+                     TextWrapping="Wrap" />
+
+          <TextBlock Margin="2,0,0,6" Style="{StaticResource CaptionTextStyle}" Text="Apple Account email" />
+          <TextBox Text="{Binding Store.Email, UpdateSourceTrigger=PropertyChanged}" />
+
+          <TextBlock Margin="2,13,0,6" Style="{StaticResource CaptionTextStyle}" Text="Apple Account password" />
+          <PasswordBox x:Name="ApplePasswordBox"
+                       PasswordChanged="ApplePasswordBox_OnPasswordChanged" />
+
+          <StackPanel Visibility="{Binding Store.RequiresTwoFactor, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock Margin="2,13,0,6"
+                       Style="{StaticResource CaptionTextStyle}"
+                       Foreground="{StaticResource OrangeBrush}"
+                       Text="Two-factor authentication code" />
+            <PasswordBox x:Name="TwoFactorCodeBox"
+                         PasswordChar="●"
+                         PasswordChanged="TwoFactorCodeBox_OnPasswordChanged" />
+          </StackPanel>
+
+          <TextBlock Margin="2,13,0,6" Style="{StaticResource CaptionTextStyle}" Text="Local vault passphrase" />
+          <PasswordBox x:Name="VaultPassphraseBox"
+                       PasswordChanged="VaultPassphraseBox_OnPasswordChanged" />
+          <TextBlock Margin="2,6,0,0"
+                     Style="{StaticResource CaptionTextStyle}"
+                     Text="This differs from your Apple password and protects the sign-in saved locally by ipatool."
+                     TextWrapping="Wrap" />
+
+          <Grid Margin="0,18,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="8" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button Style="{StaticResource SecondaryButtonStyle}"
+                    Command="{Binding Store.CheckAccountCommand}"
+                    Content="Check Existing Sign-In" />
+            <Button Grid.Column="2"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Command="{Binding Store.LoginCommand}"
+                    Content="Sign In Securely" />
+          </Grid>
+
+          <Border Margin="0,18,0,0"
+                  Padding="13"
+                  Background="{StaticResource GreenSoftBrush}"
+                  CornerRadius="13"
+                  Visibility="{Binding Store.IsLoggedIn, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Margin="0,0,8,0"
+                         FontFamily="{StaticResource SymbolFont}"
+                         Foreground="{StaticResource GreenBrush}"
+                         Text="&#xE73E;" />
+              <TextBlock FontSize="12"
+                         FontWeight="SemiBold"
+                         Foreground="{StaticResource GreenBrush}"
+                         Text="Account credentials available" />
+            </StackPanel>
+          </Border>
+
+          <Border Margin="0,18,0,0"
+                  Padding="13"
+                  Background="{StaticResource OrangeSoftBrush}"
+                  CornerRadius="13">
+            <TextBlock Style="{StaticResource CaptionTextStyle}"
+                       Foreground="#9A5A12"
+                       Text="Tip: Do not enable ipatool verbose logging; upstream verbose output may include authentication fields. IPA Bridge never enables it."
+                       TextWrapping="Wrap" />
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</UserControl>

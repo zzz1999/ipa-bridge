@@ -1,0 +1,20 @@
+* text=auto
+
+*.cs text eol=crlf
+*.xaml text eol=crlf
+*.csproj text eol=crlf
+*.sln text eol=crlf
+*.ps1 text eol=crlf
+
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.svg text eol=lf
+
+# Preserve whitespace in the verbatim Microsoft license text.
+licenses/dotnet-8.0.29/DOTNET-LIBRARY-LICENSE.txt whitespace=-trailing-space
+
+*.ico binary
+*.png binary

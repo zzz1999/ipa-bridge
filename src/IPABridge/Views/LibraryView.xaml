@@ -1,0 +1,117 @@
+<UserControl x:Class="IPABridge.Views.LibraryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid Margin="0,0,8,14">
+    <Border Style="{StaticResource CardStyle}">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Margin="0,0,0,15">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Local IPAs" />
+            <TextBlock Margin="0,4,0,0"
+                       Style="{StaticResource BodyTextStyle}"
+                       Text="{Binding Library.StatusMessage}" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal">
+            <Button Margin="0,0,8,0"
+                    Style="{StaticResource GhostButtonStyle}"
+                    Click="OpenDownloadDirectory_OnClick"
+                    Content="Open Download Folder" />
+            <Button Margin="0,0,8,0"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    Click="ChooseExternalIpa_OnClick"
+                    Content="Choose Another IPA" />
+            <Button Width="42"
+                    AutomationProperties.Name="Refresh IPA library"
+                    Padding="0"
+                    Style="{StaticResource GhostButtonStyle}"
+                    FontFamily="{StaticResource AppFont}"
+                    FontSize="18"
+                    Content="↻"
+                    ToolTip="Refresh"
+                    Command="{Binding Library.RefreshCommand}" />
+          </StackPanel>
+        </Grid>
+
+        <ListBox Grid.Row="1" ItemsSource="{Binding Library.Items}">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="58" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="150" />
+                  <ColumnDefinition Width="115" />
+                </Grid.ColumnDefinitions>
+                <Border Width="46"
+                        Height="46"
+                        Background="#E9E5FF"
+                        CornerRadius="13">
+                  <TextBlock HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             FontFamily="{StaticResource SymbolFont}"
+                             FontSize="19"
+                             Foreground="{StaticResource PurpleBrush}"
+                             Text="&#xE8B7;" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <TextBlock FontSize="14"
+                             FontWeight="SemiBold"
+                             Text="{Binding Name}"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Margin="0,3,16,0"
+                             Style="{StaticResource CaptionTextStyle}"
+                             Text="{Binding FilePath}"
+                             TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                  <TextBlock FontSize="12" FontWeight="SemiBold" Text="{Binding SizeLabel}" />
+                  <TextBlock Margin="0,3,0,0"
+                             Style="{StaticResource CaptionTextStyle}"
+                             Text="{Binding ModifiedAt, StringFormat={}{0:yyyy-MM-dd HH:mm}}" />
+                </StackPanel>
+                <Button Grid.Column="3"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Command="{Binding DataContext.QueueIpaCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                        CommandParameter="{Binding}"
+                        Content="Install on Device" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Border Grid.Row="2"
+                Margin="0,14,0,0"
+                Padding="14"
+                Background="#EEF3FA"
+                CornerRadius="14">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Margin="0,0,10,0"
+                       FontFamily="{StaticResource SymbolFont}"
+                       FontSize="15"
+                       Foreground="{StaticResource AccentBrush}"
+                       Text="&#xE946;" />
+            <TextBlock Grid.Column="1"
+                       Style="{StaticResource CaptionTextStyle}"
+                       Text="App Store IPAs remain subject to FairPlay, signing, account authorization, and device policy. IPA Bridge does not crack or bypass these restrictions."
+                       TextWrapping="Wrap" />
+          </Grid>
+        </Border>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

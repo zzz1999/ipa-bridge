@@ -1,0 +1,330 @@
+<UserControl x:Class="IPABridge.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="0,0,8,18">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="16" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Style="{StaticResource CardStyle}">
+          <StackPanel>
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="48" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Border Width="40" Height="40" Background="{StaticResource AccentSoftBrush}" CornerRadius="12">
+                <TextBlock HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontFamily="{StaticResource SymbolFont}"
+                           FontSize="17"
+                           Foreground="{StaticResource AccentBrush}"
+                           Text="&#xE896;" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock FontSize="15" FontWeight="SemiBold" Text="Official ipatool" />
+                <TextBlock Margin="0,3,0,0"
+                           Style="{StaticResource CaptionTextStyle}"
+                           Text="{Binding Settings.IpatoolStatus}" />
+              </StackPanel>
+              <Button Grid.Column="2"
+                      Style="{StaticResource PrimaryButtonStyle}"
+                      Command="{Binding Settings.InstallIpatoolCommand}"
+                      Content="Install / Update" />
+            </Grid>
+
+            <TextBlock Margin="2,19,0,7" Style="{StaticResource CaptionTextStyle}" Text="ipatool.exe path" />
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBox IsReadOnly="True"
+                       Text="{Binding Settings.IpatoolPath}" />
+              <Button Grid.Column="2"
+                      Style="{StaticResource SecondaryButtonStyle}"
+                      Click="ChooseIpatool_OnClick"
+                      Content="Choose…" />
+            </Grid>
+
+            <Button Margin="0,12,0,0"
+                    HorizontalAlignment="Left"
+                    Style="{StaticResource GhostButtonStyle}"
+                    Command="{Binding Settings.OpenIpatoolSourceCommand}"
+                    Content="View majd/ipatool Source ↗" />
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+          <StackPanel>
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="48" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Border Width="40" Height="40" Background="#E9E5FF" CornerRadius="12">
+                <TextBlock HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontFamily="{StaticResource SymbolFont}"
+                           FontSize="17"
+                           Foreground="{StaticResource PurpleBrush}"
+                           Text="&#xE8B2;" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock FontSize="15" FontWeight="SemiBold" Text="iOS Device Tools" />
+                <TextBlock Margin="0,3,0,0"
+                           Style="{StaticResource CaptionTextStyle}"
+                           Text="{Binding Settings.DeviceToolsStatus}" />
+              </StackPanel>
+              <Button Grid.Column="2"
+                      Style="{StaticResource PrimaryButtonStyle}"
+                      Command="{Binding Settings.InstallDeviceToolsCommand}"
+                      Content="Install Pinned Release" />
+            </Grid>
+
+            <TextBlock Margin="2,19,0,7" Style="{StaticResource CaptionTextStyle}" Text="Device tools folder" />
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBox IsReadOnly="True"
+                       Text="{Binding Settings.DeviceToolsDirectory}" />
+              <Button Grid.Column="2"
+                      Style="{StaticResource SecondaryButtonStyle}"
+                      Click="ChooseDeviceTools_OnClick"
+                      Content="Choose…" />
+            </Grid>
+
+            <Button Margin="0,12,0,0"
+                    HorizontalAlignment="Left"
+                    Style="{StaticResource GhostButtonStyle}"
+                    Command="{Binding Settings.OpenDeviceToolsSourceCommand}"
+                    Content="View jkcoxson/idevice Source ↗" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <Border Margin="0,16,0,0" Style="{StaticResource CardStyle}">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="16" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="14" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="48" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Width="40" Height="40" Background="{StaticResource GreenSoftBrush}" CornerRadius="12">
+              <TextBlock HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         FontFamily="{StaticResource SymbolFont}"
+                         FontSize="17"
+                         Foreground="{StaticResource GreenBrush}"
+                         Text="&#xE7BA;" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock FontSize="15" FontWeight="SemiBold" Text="Apple Device Drivers &amp; Service" />
+              <TextBlock Margin="0,3,0,0"
+                         Style="{StaticResource CaptionTextStyle}"
+                         Text="{Binding Devices.AppleDeviceSupport.OverallLabel}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+              <Button Margin="0,0,8,0"
+                      Style="{StaticResource SecondaryButtonStyle}"
+                      Command="{Binding Settings.RefreshAppleDeviceSupportCommand}"
+                      Content="Check Again" />
+              <Button Style="{StaticResource PrimaryButtonStyle}"
+                      Command="{Binding Settings.InstallAppleDevicesCommand}"
+                      Content="Install / Update" />
+            </StackPanel>
+          </Grid>
+
+          <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="10" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="10" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Padding="13" Background="#F4F6FA" CornerRadius="13">
+              <StackPanel>
+                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="Apple Devices app" />
+                <TextBlock Margin="0,4,0,0"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Text="{Binding Devices.AppleDeviceSupport.ApplicationLabel}"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Border>
+
+            <Border Grid.Column="2" Padding="13" Background="#F4F6FA" CornerRadius="13">
+              <StackPanel>
+                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="Apple USB driver" />
+                <TextBlock Margin="0,4,0,0"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Text="{Binding Devices.AppleDeviceSupport.UsbDriverLabel}"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Border>
+
+            <Border Grid.Column="4" Padding="13" Background="#F4F6FA" CornerRadius="13">
+              <StackPanel>
+                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="Verified device transport" />
+                <TextBlock Margin="0,4,0,0"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Text="{Binding Devices.AppleDeviceSupport.BackendTransportLabel}" />
+              </StackPanel>
+            </Border>
+          </Grid>
+
+          <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Margin="2,0,18,0"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource CaptionTextStyle}"
+                       Text="The one-click request uses only the official Microsoft Store package and accepts the Store and software license terms. It never bypasses UAC, enterprise policy, or the iPhone &quot;Trust This Computer&quot; prompt, and it reports success only after Windows package registration is verified."
+                       TextWrapping="Wrap" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+              <Button Margin="0,0,8,0"
+                      Style="{StaticResource GhostButtonStyle}"
+                      Command="{Binding Settings.OpenAppleDevicesStoreCommand}"
+                      Content="Microsoft Store ↗" />
+              <Button Style="{StaticResource GhostButtonStyle}"
+                      Command="{Binding Settings.OpenAppleDevicesHelpCommand}"
+                      Content="Apple Installation Guide ↗" />
+            </StackPanel>
+          </Grid>
+        </Grid>
+      </Border>
+
+      <Border Margin="0,16,0,0" Style="{StaticResource CardStyle}">
+        <StackPanel>
+          <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Local Preferences" />
+          <TextBlock Margin="0,4,0,18"
+                     Style="{StaticResource BodyTextStyle}"
+                     Text="Only paths, the email address, and refresh preferences are written to the settings file." />
+
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="150" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="9" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="IPA download folder" />
+            <TextBox Grid.Column="1"
+                     IsReadOnly="True"
+                     Text="{Binding Settings.DownloadDirectory}" />
+            <Button Grid.Column="3"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    Click="ChooseDownloadDirectory_OnClick"
+                    Content="Choose…" />
+          </Grid>
+
+          <Grid Margin="0,13,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="150" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="Apple Account email" />
+            <TextBox Grid.Column="1"
+                     Text="{Binding Settings.AppleAccountEmail, UpdateSourceTrigger=PropertyChanged}" />
+          </Grid>
+
+          <Grid Margin="0,18,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="150" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="Automatic device refresh" />
+            <CheckBox Grid.Column="1"
+                      VerticalAlignment="Center"
+                      IsChecked="{Binding Settings.AutomaticallyRefreshDevices}"
+                      Content="Check for connected devices every 8 seconds" />
+          </Grid>
+
+          <Grid Margin="0,20,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center"
+                       Style="{StaticResource BodyTextStyle}"
+                       Text="{Binding Settings.StatusMessage}" />
+            <Button Grid.Column="1"
+                    MinWidth="110"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Command="{Binding Settings.SaveCommand}"
+                    Content="Save Settings" />
+          </Grid>
+
+          <StackPanel Margin="0,17,0,0"
+                      Visibility="{Binding Settings.IsInstalling, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid Margin="1,0,1,7">
+              <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{Binding Settings.InstallationStage}" />
+              <TextBlock HorizontalAlignment="Right"
+                         Style="{StaticResource CaptionTextStyle}"
+                         Text="{Binding Settings.InstallationProgress, StringFormat={}{0:P0}}" />
+            </Grid>
+            <ProgressBar Maximum="1" Value="{Binding Settings.InstallationProgress}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <Grid Margin="0,16,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="16" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Style="{StaticResource CardStyle}">
+          <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Security &amp; Privacy" />
+            <TextBlock Margin="0,11,0,0"
+                       Style="{StaticResource BodyTextStyle}"
+                       Text="• Apple passwords, two-factor codes, and vault passphrases stay in process memory only while needed and are never written to IPA Bridge settings.&#x0a;• Sign-in uses a secure Windows ConPTY terminal; sensitive values never appear in the process command line.&#x0a;• IPA Bridge never enables ipatool verbose logging or stores raw authentication output.&#x0a;• Automatic tool downloads must match reviewed SHA-256 values pinned in this source tree before installation."
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+          <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Compatibility &amp; Notices" />
+            <TextBlock Margin="0,11,0,0"
+                       Style="{StaticResource BodyTextStyle}"
+                       Text="IPA Bridge is an independent client and is not affiliated with or sponsored by Apple Inc. Its interface uses an original, modern mobile-system visual language. App Store downloads remain encrypted IPAs, and installation must comply with Apple's signing, licensing, and device security rules."
+                       TextWrapping="Wrap" />
+            <Button Margin="0,14,0,0"
+                    HorizontalAlignment="Left"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    Command="{Binding Settings.OpenAppleDevicesHelpCommand}"
+                    Content="Apple Devices Setup Guide ↗" />
+          </StackPanel>
+        </Border>
+      </Grid>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

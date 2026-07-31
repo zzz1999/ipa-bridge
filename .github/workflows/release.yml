@@ -1,0 +1,288 @@
+name: Build and publish automatic release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ipa-bridge-automatic-release-main
+  queue: max
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Windows executable
+    runs-on: windows-2025
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: 8.0.423
+
+      - name: Prepare pinned ipatool contract binary
+        shell: pwsh
+        run: |
+          $archiveUrl = 'https://github.com/majd/ipatool/releases/download/v2.3.0/ipatool-2.3.0-windows-amd64.tar.gz'
+          $expectedHash = 'eaf208f0fee964a82f14f8eda60c4b0568fe555ad97729bb74277d3d7c0e4d54'
+          $toolDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts\test-tools\ipatool'
+          $archive = Join-Path $toolDirectory 'ipatool-2.3.0-windows-amd64.tar.gz'
+          New-Item -ItemType Directory -Force -Path $toolDirectory | Out-Null
+
+          Invoke-WebRequest -Uri $archiveUrl -OutFile $archive
+          $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            throw "The pinned ipatool archive checksum does not match: $actualHash"
+          }
+
+          & tar.exe -xzf $archive -C $toolDirectory
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not extract the pinned ipatool archive.'
+          }
+
+          $ipatool = Get-ChildItem -LiteralPath $toolDirectory -Recurse -File -Filter 'ipatool*.exe' |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $ipatool) {
+            throw 'The pinned ipatool executable was not found after extraction.'
+          }
+
+          "IPA_BRIDGE_TEST_IPATOOL=$ipatool" | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+          'IPA_BRIDGE_REQUIRE_TEST_IPATOOL=1' | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
+
+      - name: Restore
+        run: dotnet restore .\IPABridge.sln
+
+      - name: Verify formatting
+        run: dotnet format .\IPABridge.sln --no-restore --verify-no-changes
+
+      - name: Build
+        run: dotnet build .\IPABridge.sln -c Release --no-restore -warnaserror
+
+      - name: Run smoke tests
+        run: dotnet run --project .\tests\IPABridge.SmokeTests\IPABridge.SmokeTests.csproj -c Release --no-build
+
+      - name: Publish self-contained single file
+        shell: pwsh
+        run: |
+          dotnet publish .\src\IPABridge\IPABridge.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            --no-restore `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:PublishTrimmed=false `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -o .\artifacts\publish
+          if ($LASTEXITCODE -ne 0) {
+            throw 'dotnet publish failed.'
+          }
+
+          $source = Join-Path $env:GITHUB_WORKSPACE 'artifacts\publish\IPA Bridge.exe'
+          $destination = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release\IPA-Bridge.exe'
+          New-Item -ItemType Directory -Force -Path (Split-Path $destination) | Out-Null
+          if (-not (Test-Path -LiteralPath $source)) {
+            throw 'The single-file IPA Bridge executable was not produced.'
+          }
+          Copy-Item -LiteralPath $source -Destination $destination
+
+          $releaseDirectory = Split-Path $destination
+          $legalFiles = @(
+            @{
+              Source = Join-Path $env:GITHUB_WORKSPACE 'LICENSE'
+              Destination = Join-Path $releaseDirectory 'IPA-BRIDGE-LICENSE.txt'
+            },
+            @{
+              Source = Join-Path $env:GITHUB_WORKSPACE 'THIRD-PARTY-NOTICES.md'
+              Destination = Join-Path $releaseDirectory 'THIRD-PARTY-NOTICES.md'
+            },
+            @{
+              Source = Join-Path $env:USERPROFILE '.nuget/packages/microsoft.netcore.app.runtime.win-x64/8.0.29/LICENSE.TXT'
+              Destination = Join-Path $releaseDirectory 'DOTNET-RUNTIME-LICENSE.txt'
+            },
+            @{
+              Source = Join-Path $env:USERPROFILE '.nuget/packages/microsoft.netcore.app.runtime.win-x64/8.0.29/THIRD-PARTY-NOTICES.TXT'
+              Destination = Join-Path $releaseDirectory 'DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt'
+            },
+            @{
+              Source = Join-Path $env:USERPROFILE '.nuget/packages/microsoft.windowsdesktop.app.runtime.win-x64/8.0.29/LICENSE'
+              Destination = Join-Path $releaseDirectory 'WPF-LICENSE.txt'
+            },
+            @{
+              Source = Join-Path $env:GITHUB_WORKSPACE 'licenses/dotnet-8.0.29/DOTNET-LIBRARY-LICENSE.txt'
+              Destination = Join-Path $releaseDirectory 'DOTNET-LIBRARY-LICENSE.txt'
+            },
+            @{
+              Source = Join-Path $env:GITHUB_WORKSPACE 'licenses/dotnet-8.0.29/WINDOWS-SDK-LICENSING-NOTICE.txt'
+              Destination = Join-Path $releaseDirectory 'WINDOWS-SDK-LICENSING-NOTICE.txt'
+            }
+          )
+          foreach ($legalFile in $legalFiles) {
+            if (-not (Test-Path -LiteralPath $legalFile.Source -PathType Leaf)) {
+              throw "Required legal file is missing: $($legalFile.Source)"
+            }
+            Copy-Item -LiteralPath $legalFile.Source -Destination $legalFile.Destination
+          }
+
+          $hash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  IPA-Bridge.exe" |
+            Set-Content -LiteralPath "$destination.sha256" -Encoding ascii
+
+          $expectedFiles = @(
+            'IPA-Bridge.exe',
+            'IPA-Bridge.exe.sha256',
+            'IPA-BRIDGE-LICENSE.txt',
+            'THIRD-PARTY-NOTICES.md',
+            'DOTNET-RUNTIME-LICENSE.txt',
+            'DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt',
+            'WPF-LICENSE.txt',
+            'DOTNET-LIBRARY-LICENSE.txt',
+            'WINDOWS-SDK-LICENSING-NOTICE.txt'
+          )
+          $actualFiles = @(Get-ChildItem -LiteralPath $releaseDirectory -File)
+          $missingFiles = @($expectedFiles | Where-Object {
+            $_ -notin $actualFiles.Name
+          })
+          if ($missingFiles) {
+            throw "Missing release files: $($missingFiles -join ', ')"
+          }
+          $unexpectedFiles = @($actualFiles | Where-Object {
+            $_.Name -notin $expectedFiles
+          })
+          if ($unexpectedFiles) {
+            throw "Unexpected release files: $($unexpectedFiles.Name -join ', ')"
+          }
+
+      - name: Upload release payload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ipa-bridge-release-payload
+          path: |
+            artifacts/release/IPA-Bridge.exe
+            artifacts/release/IPA-Bridge.exe.sha256
+            artifacts/release/IPA-BRIDGE-LICENSE.txt
+            artifacts/release/THIRD-PARTY-NOTICES.md
+            artifacts/release/DOTNET-RUNTIME-LICENSE.txt
+            artifacts/release/DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt
+            artifacts/release/WPF-LICENSE.txt
+            artifacts/release/DOTNET-LIBRARY-LICENSE.txt
+            artifacts/release/WINDOWS-SDK-LICENSING-NOTICE.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Create release and remove previous automatic release
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AUTO_TAG: auto-build-${{ github.run_id }}-${{ github.run_attempt }}
+      AUTO_MARKER: "<!-- ipa-bridge-automatic-release -->"
+    steps:
+      - name: Download verified build payload
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ipa-bridge-release-payload
+          path: release-payload
+
+      - name: Create current automatic release
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:GITHUB_WORKSPACE 'release-payload/IPA-Bridge.exe'
+          $checksum = "$exe.sha256"
+          $releaseDirectory = Split-Path $exe
+          $requiredPayloadFiles = @(
+            'IPA-Bridge.exe',
+            'IPA-Bridge.exe.sha256',
+            'IPA-BRIDGE-LICENSE.txt',
+            'THIRD-PARTY-NOTICES.md',
+            'DOTNET-RUNTIME-LICENSE.txt',
+            'DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt',
+            'WPF-LICENSE.txt',
+            'DOTNET-LIBRARY-LICENSE.txt',
+            'WINDOWS-SDK-LICENSING-NOTICE.txt'
+          )
+          $missingPayloadFiles = @($requiredPayloadFiles | Where-Object {
+            -not (Test-Path -LiteralPath (Join-Path $releaseDirectory $_) -PathType Leaf)
+          })
+          if ($missingPayloadFiles) {
+            throw "The release payload is incomplete: $($missingPayloadFiles -join ', ')"
+          }
+
+          $expectedHash = ((Get-Content -LiteralPath $checksum -Raw).Trim() -split '\s+')[0]
+          $actualHash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash.ToLowerInvariant()) {
+            throw 'The release payload checksum does not match the executable.'
+          }
+
+          $notes = @"
+          $env:AUTO_MARKER
+
+          Automatic Windows x64 build of IPA Bridge.
+
+          Commit: $env:GITHUB_SHA
+          Workflow run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
+
+          Download ``IPA-Bridge.exe`` and run it directly. The executable is self-contained and does not require a separate .NET installation. License and third-party notice files are published beside it.
+          "@
+          $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          $notes | Set-Content -LiteralPath $notesPath -Encoding utf8
+
+          gh release create "$env:AUTO_TAG" `
+            "$exe#IPA Bridge for Windows x64" `
+            "$checksum#SHA-256 checksum" `
+            "$releaseDirectory/IPA-BRIDGE-LICENSE.txt#IPA Bridge MIT License" `
+            "$releaseDirectory/THIRD-PARTY-NOTICES.md#Third-party component summary" `
+            "$releaseDirectory/DOTNET-RUNTIME-LICENSE.txt#.NET Runtime License" `
+            "$releaseDirectory/DOTNET-RUNTIME-THIRD-PARTY-NOTICES.txt#.NET Runtime Third-Party Notices" `
+            "$releaseDirectory/WPF-LICENSE.txt#WPF License" `
+            "$releaseDirectory/DOTNET-LIBRARY-LICENSE.txt#.NET Library License" `
+            "$releaseDirectory/WINDOWS-SDK-LICENSING-NOTICE.txt#Windows SDK Licensing Notice" `
+            --repo "$env:GITHUB_REPOSITORY" `
+            --target "$env:GITHUB_SHA" `
+            --title "IPA Bridge Automatic Build #${{ github.run_number }}" `
+            --notes-file "$notesPath" `
+            --generate-notes `
+            --prerelease `
+            --latest=false
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Release creation failed; the previous automatic release was kept.'
+          }
+
+      - name: Remove older IPA Bridge automatic releases
+        shell: pwsh
+        run: |
+          $raw = gh api --paginate --slurp "repos/$env:GITHUB_REPOSITORY/releases?per_page=100"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not list repository releases.'
+          }
+
+          $pages = $raw | ConvertFrom-Json
+          $releases = @($pages | ForEach-Object { $_ })
+          $oldAutomaticReleases = @($releases | Where-Object {
+            $_.tag_name -ne $env:AUTO_TAG -and
+            $_.tag_name -match '^auto-build-[0-9]+-[0-9]+$' -and
+            ([string]$_.body).Contains($env:AUTO_MARKER, [StringComparison]::Ordinal)
+          })
+
+          foreach ($release in $oldAutomaticReleases) {
+            gh release delete "$($release.tag_name)" `
+              --repo "$env:GITHUB_REPOSITORY" `
+              --cleanup-tag `
+              --yes
+            if ($LASTEXITCODE -ne 0) {
+              throw "Could not delete old automatic release $($release.tag_name)."
+            }
+          }

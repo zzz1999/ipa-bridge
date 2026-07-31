@@ -1,0 +1,60 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Color x:Key="AppBackgroundColor">#F4F5FA</Color>
+  <Color x:Key="SurfaceColor">#F9FAFD</Color>
+  <Color x:Key="SurfaceStrongColor">#FFFFFFFF</Color>
+  <Color x:Key="SurfaceMutedColor">#EAF0F7</Color>
+  <Color x:Key="TextPrimaryColor">#172033</Color>
+  <Color x:Key="TextSecondaryColor">#667085</Color>
+  <Color x:Key="TextTertiaryColor">#98A2B3</Color>
+  <Color x:Key="AccentColor">#1677FF</Color>
+  <Color x:Key="AccentDarkColor">#075FD2</Color>
+  <Color x:Key="AccentSoftColor">#DCEBFF</Color>
+  <Color x:Key="PurpleColor">#7557E8</Color>
+  <Color x:Key="CyanColor">#16B8C8</Color>
+  <Color x:Key="GreenColor">#23A76F</Color>
+  <Color x:Key="GreenSoftColor">#DCF8EA</Color>
+  <Color x:Key="OrangeColor">#F59E42</Color>
+  <Color x:Key="OrangeSoftColor">#FFF0D9</Color>
+  <Color x:Key="RedColor">#E5484D</Color>
+  <Color x:Key="RedSoftColor">#FFE5E7</Color>
+  <Color x:Key="DividerColor">#DDE3EC</Color>
+  <Color x:Key="OverlayColor">#33FFFFFF</Color>
+
+  <SolidColorBrush x:Key="AppBackgroundBrush" Color="{StaticResource AppBackgroundColor}" />
+  <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}" />
+  <SolidColorBrush x:Key="SurfaceStrongBrush" Color="{StaticResource SurfaceStrongColor}" />
+  <SolidColorBrush x:Key="SurfaceMutedBrush" Color="{StaticResource SurfaceMutedColor}" />
+  <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}" />
+  <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}" />
+  <SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource TextTertiaryColor}" />
+  <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+  <SolidColorBrush x:Key="AccentDarkBrush" Color="{StaticResource AccentDarkColor}" />
+  <SolidColorBrush x:Key="AccentSoftBrush" Color="{StaticResource AccentSoftColor}" />
+  <SolidColorBrush x:Key="PurpleBrush" Color="{StaticResource PurpleColor}" />
+  <SolidColorBrush x:Key="CyanBrush" Color="{StaticResource CyanColor}" />
+  <SolidColorBrush x:Key="GreenBrush" Color="{StaticResource GreenColor}" />
+  <SolidColorBrush x:Key="GreenSoftBrush" Color="{StaticResource GreenSoftColor}" />
+  <SolidColorBrush x:Key="OrangeBrush" Color="{StaticResource OrangeColor}" />
+  <SolidColorBrush x:Key="OrangeSoftBrush" Color="{StaticResource OrangeSoftColor}" />
+  <SolidColorBrush x:Key="RedBrush" Color="{StaticResource RedColor}" />
+  <SolidColorBrush x:Key="RedSoftBrush" Color="{StaticResource RedSoftColor}" />
+  <SolidColorBrush x:Key="DividerBrush" Color="{StaticResource DividerColor}" />
+  <SolidColorBrush x:Key="OverlayBrush" Color="{StaticResource OverlayColor}" />
+
+  <LinearGradientBrush x:Key="HeroGradientBrush" StartPoint="0,0" EndPoint="1,1">
+    <GradientStop Offset="0" Color="#1B78FF" />
+    <GradientStop Offset="0.55" Color="#6167EA" />
+    <GradientStop Offset="1" Color="#9B5CE7" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="LogoGradientBrush" StartPoint="0,0" EndPoint="1,1">
+    <GradientStop Offset="0" Color="#2597FF" />
+    <GradientStop Offset="0.52" Color="#286BE7" />
+    <GradientStop Offset="1" Color="#7455DF" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="WindowBackgroundGradient" StartPoint="0,0" EndPoint="1,1">
+    <GradientStop Offset="0" Color="#F8FAFF" />
+    <GradientStop Offset="0.5" Color="#F2F5FB" />
+    <GradientStop Offset="1" Color="#F6F2FC" />
+  </LinearGradientBrush>
+</ResourceDictionary>

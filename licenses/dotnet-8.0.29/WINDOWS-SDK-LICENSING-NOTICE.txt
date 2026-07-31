@@ -1,0 +1,11 @@
+Windows SDK licensing notice
+
+The self-contained Windows build of IPA Bridge includes D3DCompiler_47_cor3.dll through the Microsoft.WindowsDesktop.App.Runtime.win-x64 runtime pack. Microsoft identifies this WPF component as being licensed under the Microsoft Windows Software Development Kit (SDK) for Windows 10 license terms.
+
+Authoritative license terms:
+https://learn.microsoft.com/legal/windows-sdk/license
+
+Microsoft .NET Windows license information:
+https://github.com/dotnet/core/blob/main/license-information-windows.md
+
+This notice is distributed beside IPA-Bridge.exe so recipients can identify the component and review the authoritative terms that govern it.
