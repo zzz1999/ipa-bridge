@@ -68,6 +68,8 @@ Automatic builds are published as **prereleases** and are explicitly not marked 
 
 ## First-time setup
 
+On the first launch, IPA Bridge creates a random 256-bit local settings key and asks Windows Data Protection to protect it for the current Windows user. The key is then used for authenticated encryption of IPA Bridge's saved settings. No setup prompt is required.
+
 After the first launch, open the Settings page:
 
 1. Select **Install / Update** in the official ipatool card. IPA Bridge downloads the architecture-specific official ipatool v2.3.0 archive and enables it only after verification against the matching SHA-256 value pinned in this source tree.
@@ -143,8 +145,13 @@ These are layered signals. The presence of an INF does not prove that the driver
 
 ## Privacy and supply-chain security
 
-- `%LOCALAPPDATA%\IPA Bridge\settings.json` stores only paths, the Apple account email address, and non-sensitive preferences.
-- The Apple password, two-step verification code, and local credential-vault passphrase exist briefly in IPA Bridge and ipatool process memory, but they are not written to `settings.json`, a process command line, or IPA Bridge's persistent logs.
+- `%LOCALAPPDATA%\IPA Bridge\settings.secure.json` is a versioned AES-256-GCM envelope containing IPA Bridge's complete encrypted configuration: configured paths, the saved Apple account email address, and preferences.
+- IPA Bridge creates a random 256-bit master key on first launch. Only the Windows Data Protection API `CurrentUser`-protected form is stored in `%LOCALAPPDATA%\IPA Bridge\master-key.v1`; the raw key is not written to disk.
+- Every settings save uses a new 96-bit nonce and a 128-bit authentication tag. A copied, modified, truncated, or mismatched settings envelope is rejected instead of being silently replaced with defaults.
+- An existing plaintext `%LOCALAPPDATA%\IPA Bridge\settings.json` from an earlier IPA Bridge build is migrated to the encrypted file. The encrypted result is reopened and verified before the legacy plaintext file is removed.
+- Settings with an unsupported envelope version or unrecognized configuration fields are rejected and preserved instead of being rewritten by an older schema.
+- If encrypted and legacy settings both exist with different values, IPA Bridge preserves both, reports a conflict, and blocks settings saves instead of guessing which file should win.
+- The Apple password, two-step verification code, and local credential-vault passphrase exist briefly in IPA Bridge and ipatool process memory, but they are not written to IPA Bridge settings, a process command line, or IPA Bridge's persistent logs.
 - Sensitive values are written to ipatool's terminal prompts through Windows ConPTY rather than passed as command-line arguments.
 - ConPTY output is redacted against known sensitive values again before it leaves the execution layer.
 - IPA Bridge does not enable `ipatool --verbose`, avoiding upstream detailed logs that may record authentication fields.
@@ -152,7 +159,9 @@ These are layered signals. The presence of an INF does not prove that the driver
 - A new tool version is written to a separate directory and becomes active only after validation; the version currently in use is not overwritten.
 - Apple Devices acquisition always relies on Microsoft Store for validation and updates. IPA Bridge does not host an Apple installer.
 
-After a successful ipatool login, ipatool manages account data in the user's credential store according to its own design. IPA Bridge does not take control of, copy, or separately persist that data.
+After a successful ipatool login, ipatool communicates with Apple services and manages account data in the user's credential store according to its own design. IPA Bridge does not take control of, copy, or separately persist that data. Downloaded IPA files, installed tools, device pairing records, ipatool's credential store, and files in user-selected folders are outside IPA Bridge's settings encryption.
+
+Windows `CurrentUser` protection ties the master key to the Windows user profile that created it. It does not protect against malware, an administrator, memory inspection, or another process already running as that user. Losing the Windows profile or `master-key.v1` can make `settings.secure.json` unrecoverable; IPA Bridge does not generate a replacement key while encrypted settings still exist.
 
 ## IPA installation boundaries
 
@@ -170,12 +179,13 @@ IPA Bridge preserves and displays useful errors from the underlying tools whenev
 
 | Content | Default location |
 | --- | --- |
-| Settings | `%LOCALAPPDATA%\IPA Bridge\settings.json` |
+| Encrypted settings | `%LOCALAPPDATA%\IPA Bridge\settings.secure.json` |
+| Windows-protected settings key | `%LOCALAPPDATA%\IPA Bridge\master-key.v1` |
 | Automatically installed tools | `%LOCALAPPDATA%\IPA Bridge\Tools` |
 | Temporary files | `%LOCALAPPDATA%\IPA Bridge\Temporary` |
 | IPA downloads | `%USERPROFILE%\Downloads\IPA Bridge` |
 
-The tool and download directories can be replaced from Settings with paths the user has reviewed. Sensitive passphrases are not written to the settings file above.
+The tool and download directories can be replaced from Settings with paths the user has reviewed. Sensitive passphrases are not written to the encrypted settings file. A legacy plaintext `settings.json` may appear only until a previous installation has completed its verified one-time migration.
 
 ## Troubleshooting
 
@@ -186,6 +196,8 @@ The tool and download directories can be replaced from Settings with paths the u
 | Driver status is unavailable to read | The Driver Store could not be inspected; this does not prove the driver is missing, and IPA Bridge continues device discovery when the transport is working |
 | The iPhone or iPad cannot be found | Try a data-capable cable or another USB port, keep the device unlocked, accept Trust This Computer, and refresh |
 | The existing login cannot be checked | Confirm that the value entered is the local credential-vault passphrase; it may differ from the Apple account password |
+| Encrypted settings cannot be opened | Restore `settings.secure.json` and `master-key.v1` together from the same Windows user profile. If recovery is unnecessary, remove both files to start with new settings; the previous encrypted settings cannot then be recovered |
+| Encrypted and legacy settings conflict | Back up both files, compare which configuration should be retained, then move the unwanted file out of `%LOCALAPPDATA%\IPA Bridge` and restart IPA Bridge |
 | Version history shows only a number | Metadata for that version could not be resolved; the number is the original external version identifier and remains valid for selection and download |
 | IPA installation is rejected | Inspect the low-level output on the Devices page and check signing, entitlement, provisioning, iOS compatibility, and device-management policy |
 | SmartScreen reports an unknown publisher | Automatic builds are not currently code-signed; download only from this repository and verify the SHA-256 hash |

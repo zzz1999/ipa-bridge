@@ -186,21 +186,49 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <Border Grid.Row="2"
+            <Button x:Name="PrivacyCardButton"
+                    Grid.Row="2"
                     Margin="3"
-                    Padding="13"
-                    Background="#B7F0F4FA"
-                    CornerRadius="14">
-              <StackPanel>
-                <TextBlock FontSize="12"
-                           FontWeight="SemiBold"
-                           Text="Privacy by design" />
-                <TextBlock Margin="0,4,0,0"
-                           Style="{StaticResource CaptionTextStyle}"
-                           TextWrapping="Wrap"
-                           Text="Sensitive credentials pass only through a secure terminal and are never written to IPA Bridge settings." />
-              </StackPanel>
-            </Border>
+                    AutomationProperties.HelpText="Shows how IPA Bridge stores and protects its settings."
+                    AutomationProperties.Name="Open privacy and local encryption information"
+                    Style="{StaticResource PrivacyCardButtonStyle}"
+                    ToolTip="Open privacy and local encryption information"
+                    Click="PrivacyCardButton_OnClick">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="28" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Width="25"
+                        Height="25"
+                        VerticalAlignment="Top"
+                        Background="{StaticResource AccentSoftBrush}"
+                        CornerRadius="8">
+                  <TextBlock HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             FontFamily="{StaticResource SymbolFont}"
+                             FontSize="12"
+                             Foreground="{StaticResource AccentBrush}"
+                             Text="&#xE72E;" />
+                </Border>
+                <StackPanel Grid.Column="1" Margin="8,0,6,0">
+                  <TextBlock FontSize="12"
+                             FontWeight="SemiBold"
+                             Text="Privacy by design" />
+                  <TextBlock Margin="0,4,0,0"
+                             Style="{StaticResource CaptionTextStyle}"
+                             TextWrapping="Wrap"
+                             Text="View local encryption and data-handling details" />
+                </StackPanel>
+                <TextBlock Grid.Column="2"
+                           VerticalAlignment="Center"
+                           FontFamily="{StaticResource SymbolFont}"
+                           FontSize="10"
+                           Foreground="{StaticResource TextTertiaryBrush}"
+                           Text="&#xE76C;" />
+              </Grid>
+            </Button>
           </Grid>
         </Border>
 

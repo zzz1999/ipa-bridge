@@ -1,0 +1,176 @@
+<Window x:Class="IPABridge.Views.PrivacyDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="Privacy &amp; Local Encryption"
+        Width="570"
+        Height="640"
+        MinWidth="420"
+        MinHeight="360"
+        AutomationProperties.Name="Privacy and local encryption information"
+        Background="{StaticResource WindowBackgroundGradient}"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        SnapsToDevicePixels="True"
+        UseLayoutRounding="True"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        PreviewKeyDown="PrivacyDialog_OnPreviewKeyDown">
+  <shell:WindowChrome.WindowChrome>
+    <shell:WindowChrome CaptionHeight="58"
+                        CornerRadius="20"
+                        GlassFrameThickness="0"
+                        ResizeBorderThickness="0"
+                        UseAeroCaptionButtons="False" />
+  </shell:WindowChrome.WindowChrome>
+
+  <Border Background="#F8FAFE"
+          BorderBrush="#BFFFFFFF"
+          BorderThickness="1"
+          CornerRadius="20">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="58" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="72" />
+      </Grid.RowDefinitions>
+
+      <Grid Grid.Row="0" Margin="22,0,12,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+          <Border Width="32"
+                  Height="32"
+                  Background="{StaticResource AccentSoftBrush}"
+                  CornerRadius="10">
+            <TextBlock HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontFamily="{StaticResource SymbolFont}"
+                       FontSize="15"
+                       Foreground="{StaticResource AccentBrush}"
+                       Text="&#xE72E;" />
+          </Border>
+          <TextBlock Margin="11,0,0,0"
+                     VerticalAlignment="Center"
+                     FontSize="17"
+                     FontWeight="SemiBold"
+                     Text="Privacy &amp; Local Encryption" />
+        </StackPanel>
+        <Button x:Name="CloseDialogButton"
+                Grid.Column="1"
+                Width="38"
+                Height="34"
+                Padding="0"
+                AutomationProperties.Name="Close privacy information"
+                FontFamily="{StaticResource SymbolFont}"
+                FontSize="11"
+                Style="{StaticResource GhostButtonStyle}"
+                Content="&#xE711;"
+                Click="CloseButton_OnClick"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True" />
+      </Grid>
+
+      <ScrollViewer x:Name="PrivacyScrollViewer"
+                    Grid.Row="1"
+                    Margin="22,0,15,0"
+                    Padding="0,7,7,7"
+                    AutomationProperties.Name="Privacy notice content"
+                    Focusable="True"
+                    HorizontalScrollBarVisibility="Disabled"
+                    PanningMode="VerticalOnly"
+                    VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+          <TextBlock FontSize="25"
+                     FontWeight="SemiBold"
+                     Text="Your settings stay under your control" />
+          <TextBlock Margin="0,7,0,17"
+                     Style="{StaticResource BodyTextStyle}"
+                     TextWrapping="Wrap"
+                     Text="IPA Bridge is designed to minimize the information it stores and to protect its own saved settings on this Windows PC." />
+
+          <Border Margin="0,0,0,10" Style="{StaticResource CompactCardStyle}">
+            <StackPanel>
+              <TextBlock FontSize="15" FontWeight="SemiBold" Text="Stored on this PC" />
+              <TextBlock Margin="0,5,0,0"
+                         Style="{StaticResource BodyTextStyle}"
+                         TextWrapping="Wrap"
+                         Text="IPA Bridge stores its settings in your Windows user profile. It does not save these settings to an IPA Bridge account or an IPA Bridge-operated cloud service." />
+            </StackPanel>
+          </Border>
+
+          <Border Margin="0,0,0,10" Style="{StaticResource CompactCardStyle}">
+            <StackPanel>
+              <TextBlock FontSize="15" FontWeight="SemiBold" Text="Encrypted at rest" />
+              <TextBlock Margin="0,5,0,0"
+                         Style="{StaticResource BodyTextStyle}"
+                         TextWrapping="Wrap"
+                         Text="On first launch, IPA Bridge creates a random 256-bit encryption key. Windows protects that key for your current Windows user, and IPA Bridge uses AES-256-GCM authenticated encryption for its local settings. The settings are decrypted in memory only while the application needs them." />
+            </StackPanel>
+          </Border>
+
+          <Border Margin="0,0,0,10" Style="{StaticResource CompactCardStyle}">
+            <StackPanel>
+              <TextBlock FontSize="15" FontWeight="SemiBold" Text="Credentials are not saved by IPA Bridge" />
+              <TextBlock Margin="0,5,0,0"
+                         Style="{StaticResource BodyTextStyle}"
+                         TextWrapping="Wrap"
+                         Text="IPA Bridge does not save your Apple Account password, two-factor verification code, or ipatool vault passphrase. These values are supplied to the official ipatool process through a local Windows pseudoconsole only when required. ipatool communicates with Apple services and manages its own credential store." />
+            </StackPanel>
+          </Border>
+
+          <Border Margin="0,0,0,10" Style="{StaticResource CompactCardStyle}">
+            <StackPanel>
+              <TextBlock FontSize="15" FontWeight="SemiBold" Text="What this encryption does not cover" />
+              <TextBlock Margin="0,5,0,0"
+                         Style="{StaticResource BodyTextStyle}"
+                         TextWrapping="Wrap"
+                         Text="Downloaded IPA files, files in folders you select, and information stored independently by ipatool, Apple Devices, Windows, or other tools are not protected by IPA Bridge's settings encryption." />
+            </StackPanel>
+          </Border>
+
+          <Border Margin="0,0,0,10" Style="{StaticResource CompactCardStyle}">
+            <StackPanel>
+              <TextBlock FontSize="15" FontWeight="SemiBold" Text="Security limits" />
+              <TextBlock Margin="0,5,0,0"
+                         Style="{StaticResource BodyTextStyle}"
+                         TextWrapping="Wrap"
+                         Text="Local encryption helps protect the settings file if it is copied, but it cannot protect data from malware or another process running as your Windows account. If your Windows profile or protected encryption key is lost, the encrypted settings may be unrecoverable." />
+            </StackPanel>
+          </Border>
+
+          <Border Margin="0,0,0,10"
+                  Padding="16"
+                  Background="{StaticResource OrangeSoftBrush}"
+                  CornerRadius="15">
+            <TextBlock Style="{StaticResource BodyTextStyle}"
+                       Foreground="#98530C"
+                       TextWrapping="Wrap"
+                       Text="Local encryption protects saved settings at rest, but cannot protect a compromised Windows session. You remain responsible for your Windows account, backups, third-party tools, and use of Apple services." />
+          </Border>
+
+          <TextBlock Margin="3,3,3,4"
+                     Style="{StaticResource CaptionTextStyle}"
+                     TextWrapping="Wrap"
+                     Text="IPA Bridge is independent software and is not affiliated with or sponsored by Apple Inc." />
+        </StackPanel>
+      </ScrollViewer>
+
+      <Border Grid.Row="2"
+              Padding="22,13"
+              Background="#EFFFFFFF"
+              BorderBrush="{StaticResource DividerBrush}"
+              BorderThickness="0,1,0,0">
+        <Button x:Name="DoneButton"
+                MinWidth="110"
+                HorizontalAlignment="Right"
+                AutomationProperties.Name="Close privacy information"
+                Content="Done"
+                IsDefault="True"
+                Style="{StaticResource PrimaryButtonStyle}"
+                Click="CloseButton_OnClick" />
+      </Border>
+    </Grid>
+  </Border>
+</Window>

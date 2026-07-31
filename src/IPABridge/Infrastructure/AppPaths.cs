@@ -5,7 +5,11 @@ public static class AppPaths
     public static string LocalDataDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IPA Bridge");
 
-    public static string ConfigurationFile => Path.Combine(LocalDataDirectory, "settings.json");
+    public static string ConfigurationFile => Path.Combine(LocalDataDirectory, "settings.secure.json");
+
+    public static string LegacyConfigurationFile => Path.Combine(LocalDataDirectory, "settings.json");
+
+    public static string LocalDataKeyFile => Path.Combine(LocalDataDirectory, "master-key.v1");
 
     public static string ToolsDirectory => Path.Combine(LocalDataDirectory, "Tools");
 

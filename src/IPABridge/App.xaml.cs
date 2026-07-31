@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using IPABridge.ViewModels;
@@ -43,6 +44,8 @@ public partial class App : Application
         var exitCode = 0;
         var result = "PASS";
         MainViewModel? viewModel = null;
+        MainWindow? mainWindow = null;
+        PrivacyDialog? privacyDialog = null;
         try
         {
             viewModel = new MainViewModel();
@@ -76,6 +79,9 @@ public partial class App : Application
             }
 
             VerifyVerboseLoggingTipDismissal(storeView, viewModel.Store);
+            mainWindow = new MainWindow();
+            privacyDialog = new PrivacyDialog();
+            VerifyPrivacySurfaces(mainWindow, privacyDialog);
 
             if (_wpfBindingSmokeFailure is not null)
             {
@@ -93,6 +99,8 @@ public partial class App : Application
         {
             try
             {
+                privacyDialog?.Close();
+                mainWindow?.Close();
                 viewModel?.Dispose();
             }
             catch (Exception exception)
@@ -171,6 +179,48 @@ public partial class App : Application
             storeView.VerboseLoggingTip.Visibility != Visibility.Collapsed)
         {
             throw new InvalidOperationException("The verbose logging tip did not collapse after dismissal.");
+        }
+    }
+
+    private static void VerifyPrivacySurfaces(MainWindow mainWindow, PrivacyDialog privacyDialog)
+    {
+        mainWindow.ApplyTemplate();
+        if (!mainWindow.PrivacyCardButton.Focusable ||
+            string.IsNullOrWhiteSpace(AutomationProperties.GetName(mainWindow.PrivacyCardButton)))
+        {
+            throw new InvalidOperationException(
+                "The privacy card is not keyboard focusable or has no automation name.");
+        }
+
+        if (!privacyDialog.DoneButton.IsDefault ||
+            !privacyDialog.DoneButton.Focusable ||
+            !privacyDialog.CloseDialogButton.Focusable)
+        {
+            throw new InvalidOperationException("The privacy dialog has no accessible close path.");
+        }
+
+        if (privacyDialog.Content is not FrameworkElement content)
+        {
+            throw new InvalidOperationException("The privacy dialog has no layout root.");
+        }
+
+        Size[] dialogLayoutSizes =
+        [
+            new Size(420, 360),
+            new Size(500, 520),
+            new Size(570, 640)
+        ];
+        foreach (var layoutSize in dialogLayoutSizes)
+        {
+            content.Measure(layoutSize);
+            content.Arrange(new Rect(layoutSize));
+            content.UpdateLayout();
+            if (privacyDialog.PrivacyScrollViewer.RenderSize.Height <= 0 ||
+                privacyDialog.DoneButton.RenderSize.Height <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"The privacy dialog does not lay out at {layoutSize.Width}x{layoutSize.Height}.");
+            }
         }
     }
 

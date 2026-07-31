@@ -10,6 +10,18 @@
 
 No third-party .NET package is required by the desktop application.
 
+## Local configuration protection
+
+`ConfigurationService` persists the complete `AppConfiguration` in `%LOCALAPPDATA%\IPA Bridge\settings.secure.json`. The file is a versioned envelope rather than a directly deserializable configuration, which also prevents an older IPA Bridge build from treating encrypted data as an empty configuration and overwriting it.
+
+On the first `LoadAsync`, `LocalDataProtectionService` generates 32 bytes with the platform cryptographic random-number generator. Windows Data Protection API protects that master key with `DataProtectionScope.CurrentUser`, optional application-specific entropy, and its built-in integrity protection. Only the protected blob is atomically committed as `master-key.v1`.
+
+The serialized configuration is encrypted with AES-256-GCM using a fresh 12-byte nonce, a 16-byte authentication tag, and versioned associated data on every save. The envelope and master key are each written to a unique same-directory temporary file, flushed, and moved into place. Plaintext and raw-key byte buffers are cleared after use where managed-memory APIs permit it.
+
+An earlier plaintext `settings.json` is handled as a one-time migration source. IPA Bridge commits the protected key, writes the encrypted envelope, reopens and authenticates it, compares every configuration field, and only then removes the legacy file. Unknown configuration fields are rejected so an older schema cannot silently discard data. If both files exist with identical values, the verified encrypted file completes the interrupted migration. If their values differ, loading and all later saves fail closed while both files remain untouched. A missing key, a DPAPI failure, an unsupported envelope, or failed AES-GCM authentication likewise stops loading without generating a replacement or overwriting the encrypted data.
+
+This boundary covers only IPA Bridge's settings. Apple passwords, two-factor codes, and ipatool vault passphrases remain non-persistent and pass to ipatool through ConPTY. Downloaded IPAs, installed tools, pairing records, ipatool's independent credential store, and other external files are not encrypted by the IPA Bridge settings key. Windows `CurrentUser` protection also does not defend against code already executing as the same user or against a compromised live session.
+
 ## Authentication flow
 
 `ipatool` uses terminal-only password readers for the Apple password and keyring passphrase. Passing the corresponding command flags would expose values in the Windows process command line.

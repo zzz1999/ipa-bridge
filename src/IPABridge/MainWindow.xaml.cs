@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using IPABridge.Infrastructure;
 using IPABridge.ViewModels;
+using IPABridge.Views;
 
 namespace IPABridge;
 
@@ -47,4 +48,13 @@ public partial class MainWindow : Window
     }
 
     private void CloseButton_OnClick(object sender, RoutedEventArgs e) => Close();
+
+    private void PrivacyCardButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new PrivacyDialog
+        {
+            Owner = this
+        };
+        _ = dialog.ShowDialog();
+    }
 }

@@ -1,5 +1,8 @@
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using IPABridge.Infrastructure;
 using IPABridge.Models;
 using IPABridge.Services;
@@ -74,6 +77,20 @@ bool Throws<TException>(Action action)
     try
     {
         action();
+        return false;
+    }
+    catch (TException)
+    {
+        return true;
+    }
+}
+
+async Task<bool> ThrowsAsync<TException>(Func<Task> action)
+    where TException : Exception
+{
+    try
+    {
+        await action();
         return false;
     }
     catch (TException)
@@ -522,6 +539,7 @@ try
     var isolatedConfiguration = new ConfigurationService(
         blockedConfigurationPath,
         Path.Combine(temporaryConfigurationRoot, "Downloads"));
+    await isolatedConfiguration.LoadAsync();
     var saveFailed = false;
     try
     {
@@ -544,6 +562,427 @@ try
 finally
 {
     Directory.Delete(temporaryConfigurationRoot, recursive: true);
+}
+
+var encryptedConfigurationRoot = Path.Combine(
+    Path.GetTempPath(),
+    $"ipa-bridge-encrypted-configuration-smoke-{Guid.NewGuid():N}");
+Directory.CreateDirectory(encryptedConfigurationRoot);
+try
+{
+    var secureConfigurationPath = Path.Combine(
+        encryptedConfigurationRoot,
+        "settings.secure.json");
+    var legacyConfigurationPath = Path.Combine(encryptedConfigurationRoot, "settings.json");
+    var keyPath = Path.Combine(encryptedConfigurationRoot, "master-key.v1");
+    var downloadPath = Path.Combine(encryptedConfigurationRoot, "Downloads");
+    var keyProtector = new SmokeKeyProtector();
+    var randomByteGenerator = new SmokeRandomByteGenerator();
+    var encryptedConfiguration = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        keyProtector,
+        randomByteGenerator);
+
+    await encryptedConfiguration.LoadAsync();
+    Check(File.Exists(keyPath), "first launch creates a protected local settings key");
+    Check(
+        keyProtector.LastProtectedPlaintext is { Length: LocalDataProtectionService.MasterKeySize },
+        "first-launch settings key is 256 bits");
+    Check(
+        keyProtector.LastProtectedPlaintext is not null &&
+        !File.ReadAllBytes(keyPath).AsSpan().SequenceEqual(keyProtector.LastProtectedPlaintext),
+        "settings key is protected before it is written to disk");
+
+    const string emailCanary = "encrypted-settings-canary@example.invalid";
+    const string toolCanary = "SECRET_TOOL_PATH_CANARY";
+    const string deviceToolCanary = "SECRET_DEVICE_PATH_CANARY";
+    encryptedConfiguration.Current.IpatoolPath = Path.Combine(
+        encryptedConfigurationRoot,
+        toolCanary,
+        "ipatool.exe");
+    encryptedConfiguration.Current.DeviceToolsDirectory = Path.Combine(
+        encryptedConfigurationRoot,
+        deviceToolCanary);
+    encryptedConfiguration.Current.DownloadDirectory = downloadPath;
+    encryptedConfiguration.Current.AppleAccountEmail = emailCanary;
+    encryptedConfiguration.Current.AutomaticallyRefreshDevices = false;
+    await encryptedConfiguration.SaveAsync();
+
+    var firstEncryptedFile = File.ReadAllBytes(secureConfigurationPath);
+    var firstEncryptedText = Encoding.UTF8.GetString(firstEncryptedFile);
+    Check(
+        firstEncryptedText.Contains(LocalDataProtectionService.EnvelopeFormat, StringComparison.Ordinal) &&
+        firstEncryptedText.Contains(LocalDataProtectionService.EnvelopeAlgorithm, StringComparison.Ordinal),
+        "settings use a versioned AES-256-GCM envelope");
+    Check(
+        !firstEncryptedText.Contains(emailCanary, StringComparison.Ordinal) &&
+        !firstEncryptedText.Contains(toolCanary, StringComparison.Ordinal) &&
+        !firstEncryptedText.Contains(deviceToolCanary, StringComparison.Ordinal),
+        "encrypted settings do not expose saved email or path values");
+
+    var reopenedConfiguration = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    var reopened = await reopenedConfiguration.LoadAsync();
+    Check(
+        reopened.IpatoolPath == encryptedConfiguration.Current.IpatoolPath &&
+        reopened.DeviceToolsDirectory == encryptedConfiguration.Current.DeviceToolsDirectory &&
+        reopened.DownloadDirectory == encryptedConfiguration.Current.DownloadDirectory &&
+        reopened.AppleAccountEmail == emailCanary &&
+        !reopened.AutomaticallyRefreshDevices,
+        "encrypted settings round-trip every configuration property");
+
+    await encryptedConfiguration.SaveAsync();
+    var secondEncryptedFile = File.ReadAllBytes(secureConfigurationPath);
+    Check(
+        !firstEncryptedFile.AsSpan().SequenceEqual(secondEncryptedFile),
+        "saving identical settings uses a fresh authenticated-encryption nonce");
+
+    var validEncryptedFile = secondEncryptedFile.ToArray();
+    var tamperedEnvelope = JsonNode.Parse(validEncryptedFile)!.AsObject();
+    var ciphertext = tamperedEnvelope["ciphertext"]!.GetValue<string>();
+    var replacementCharacter = ciphertext[0] == 'A' ? 'B' : 'A';
+    tamperedEnvelope["ciphertext"] = replacementCharacter + ciphertext[1..];
+    File.WriteAllText(secureConfigurationPath, tamperedEnvelope.ToJsonString());
+    var tamperedConfiguration = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    Check(
+        await ThrowsAsync<InvalidDataException>(() => tamperedConfiguration.LoadAsync()),
+        "tampered settings ciphertext is rejected");
+    var rejectedEncryptedFile = File.ReadAllBytes(secureConfigurationPath);
+    Check(
+        await ThrowsAsync<InvalidOperationException>(() => tamperedConfiguration.SaveAsync()),
+        "a failed encrypted settings load blocks later saves");
+    Check(
+        File.ReadAllBytes(secureConfigurationPath).AsSpan().SequenceEqual(rejectedEncryptedFile),
+        "rejected settings ciphertext is not silently overwritten");
+
+    await File.WriteAllBytesAsync(secureConfigurationPath, validEncryptedFile);
+    var tamperedTagEnvelope = JsonNode.Parse(validEncryptedFile)!.AsObject();
+    var authenticationTag = tamperedTagEnvelope["authenticationTag"]!.GetValue<string>();
+    var tagReplacementCharacter = authenticationTag[0] == 'A' ? 'B' : 'A';
+    tamperedTagEnvelope["authenticationTag"] =
+        tagReplacementCharacter + authenticationTag[1..];
+    File.WriteAllText(secureConfigurationPath, tamperedTagEnvelope.ToJsonString());
+    var tamperedTagConfiguration = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    Check(
+        await ThrowsAsync<InvalidDataException>(() => tamperedTagConfiguration.LoadAsync()),
+        "tampered settings authentication tag is rejected");
+
+    await File.WriteAllBytesAsync(secureConfigurationPath, validEncryptedFile);
+    var tamperedNonceEnvelope = JsonNode.Parse(validEncryptedFile)!.AsObject();
+    var nonce = tamperedNonceEnvelope["nonce"]!.GetValue<string>();
+    var nonceReplacementCharacter = nonce[0] == 'A' ? 'B' : 'A';
+    tamperedNonceEnvelope["nonce"] = nonceReplacementCharacter + nonce[1..];
+    File.WriteAllText(secureConfigurationPath, tamperedNonceEnvelope.ToJsonString());
+    var tamperedNonceConfiguration = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    Check(
+        await ThrowsAsync<InvalidDataException>(() => tamperedNonceConfiguration.LoadAsync()),
+        "tampered settings nonce is rejected");
+
+    await File.WriteAllBytesAsync(secureConfigurationPath, validEncryptedFile);
+    var savedProtectedKey = File.ReadAllBytes(keyPath);
+    var corruptedProtectedKey = savedProtectedKey.ToArray();
+    corruptedProtectedKey[0] ^= 0x01;
+    await File.WriteAllBytesAsync(keyPath, corruptedProtectedKey);
+    var corruptedKeyConfiguration = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    Check(
+        await ThrowsAsync<InvalidDataException>(() => corruptedKeyConfiguration.LoadAsync()),
+        "a corrupted local settings key cannot authenticate encrypted settings");
+    Check(
+        File.ReadAllBytes(keyPath).AsSpan().SequenceEqual(corruptedProtectedKey),
+        "a corrupted local settings key is not silently replaced");
+
+    await File.WriteAllBytesAsync(keyPath, savedProtectedKey);
+    File.Delete(keyPath);
+    var missingKeyRandom = new SmokeRandomByteGenerator();
+    var missingKeyConfiguration = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        missingKeyRandom);
+    Check(
+        await ThrowsAsync<InvalidDataException>(() => missingKeyConfiguration.LoadAsync()),
+        "encrypted settings fail closed when their local key is missing");
+    Check(
+        !File.Exists(keyPath) && missingKeyRandom.RequestCount == 0,
+        "a missing key for existing encrypted settings is not silently replaced");
+    await File.WriteAllBytesAsync(keyPath, savedProtectedKey);
+
+    var unsupportedEnvelope = JsonNode.Parse(validEncryptedFile)!.AsObject();
+    unsupportedEnvelope["version"] = LocalDataProtectionService.EnvelopeVersion + 1;
+    File.WriteAllText(secureConfigurationPath, unsupportedEnvelope.ToJsonString());
+    var unsupportedConfiguration = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    Check(
+        await ThrowsAsync<InvalidDataException>(() => unsupportedConfiguration.LoadAsync()),
+        "unknown encrypted settings versions are rejected");
+    await File.WriteAllBytesAsync(secureConfigurationPath, validEncryptedFile);
+
+    var conflictingLegacyConfiguration = new AppConfiguration
+    {
+        AppleAccountEmail = "newer-legacy-conflict@example.invalid",
+        DownloadDirectory = downloadPath
+    };
+    await File.WriteAllTextAsync(
+        legacyConfigurationPath,
+        JsonSerializer.Serialize(conflictingLegacyConfiguration));
+    var secureBeforeConflict = File.ReadAllBytes(secureConfigurationPath);
+    var legacyBeforeConflict = File.ReadAllBytes(legacyConfigurationPath);
+    var conflictConfiguration = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    Check(
+        await ThrowsAsync<InvalidDataException>(() => conflictConfiguration.LoadAsync()),
+        "different encrypted and legacy settings are reported as a migration conflict");
+    Check(
+        File.ReadAllBytes(secureConfigurationPath).AsSpan().SequenceEqual(secureBeforeConflict) &&
+        File.ReadAllBytes(legacyConfigurationPath).AsSpan().SequenceEqual(legacyBeforeConflict),
+        "a settings migration conflict preserves both source files");
+    Check(
+        await ThrowsAsync<InvalidOperationException>(() => conflictConfiguration.SaveAsync()),
+        "a settings migration conflict blocks later saves");
+    File.Delete(legacyConfigurationPath);
+
+    var canaries = new[] { emailCanary, toolCanary, deviceToolCanary };
+    var plaintextCanaryFound = Directory
+        .EnumerateFiles(encryptedConfigurationRoot, "*", SearchOption.AllDirectories)
+        .Select(File.ReadAllBytes)
+        .Any(fileBytes => canaries.Any(canary =>
+            fileBytes.AsSpan().IndexOf(Encoding.UTF8.GetBytes(canary)) >= 0 ||
+            fileBytes.AsSpan().IndexOf(Encoding.Unicode.GetBytes(canary)) >= 0));
+    Check(!plaintextCanaryFound, "local settings files contain no UTF-8 or UTF-16 plaintext canaries");
+
+    var secretConfigurationProperties = typeof(AppConfiguration)
+        .GetProperties()
+        .Where(property =>
+            property.Name.Contains("Password", StringComparison.OrdinalIgnoreCase) ||
+            property.Name.Contains("Verification", StringComparison.OrdinalIgnoreCase) ||
+            property.Name.Contains("Passphrase", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    Check(
+        secretConfigurationProperties.Length == 0,
+        "passwords, verification codes, and vault passphrases remain non-persistent");
+}
+finally
+{
+    Directory.Delete(encryptedConfigurationRoot, recursive: true);
+}
+
+var legacyMigrationRoot = Path.Combine(
+    Path.GetTempPath(),
+    $"ipa-bridge-legacy-migration-smoke-{Guid.NewGuid():N}");
+Directory.CreateDirectory(legacyMigrationRoot);
+try
+{
+    var secureConfigurationPath = Path.Combine(legacyMigrationRoot, "settings.secure.json");
+    var legacyConfigurationPath = Path.Combine(legacyMigrationRoot, "settings.json");
+    var keyPath = Path.Combine(legacyMigrationRoot, "master-key.v1");
+    var downloadPath = Path.Combine(legacyMigrationRoot, "Downloads");
+    var legacyConfiguration = new AppConfiguration
+    {
+        IpatoolPath = Path.Combine(legacyMigrationRoot, "legacy-ipatool.exe"),
+        DeviceToolsDirectory = Path.Combine(legacyMigrationRoot, "legacy-device-tools"),
+        DownloadDirectory = downloadPath,
+        AppleAccountEmail = "legacy-migration-canary@example.invalid",
+        AutomaticallyRefreshDevices = false
+    };
+    await File.WriteAllTextAsync(
+        legacyConfigurationPath,
+        JsonSerializer.Serialize(legacyConfiguration, new JsonSerializerOptions { WriteIndented = true }));
+
+    var migrationService = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    var migratedConfiguration = await migrationService.LoadAsync();
+    Check(
+        migratedConfiguration.AppleAccountEmail == legacyConfiguration.AppleAccountEmail &&
+        migratedConfiguration.IpatoolPath == legacyConfiguration.IpatoolPath &&
+        !migratedConfiguration.AutomaticallyRefreshDevices,
+        "legacy plaintext settings preserve every value during migration");
+    Check(
+        File.Exists(secureConfigurationPath) &&
+        File.Exists(keyPath) &&
+        !File.Exists(legacyConfigurationPath),
+        "verified legacy settings migration removes the plaintext file");
+    Check(
+        !File.ReadAllText(secureConfigurationPath)
+            .Contains(legacyConfiguration.AppleAccountEmail, StringComparison.Ordinal),
+        "migrated settings are encrypted before legacy plaintext is removed");
+
+    var migratedReopenService = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    Check(
+        (await migratedReopenService.LoadAsync()).AppleAccountEmail ==
+        legacyConfiguration.AppleAccountEmail,
+        "migrated encrypted settings reopen with the persisted key");
+}
+finally
+{
+    Directory.Delete(legacyMigrationRoot, recursive: true);
+}
+
+var unknownLegacyFieldRoot = Path.Combine(
+    Path.GetTempPath(),
+    $"ipa-bridge-unknown-legacy-field-smoke-{Guid.NewGuid():N}");
+Directory.CreateDirectory(unknownLegacyFieldRoot);
+try
+{
+    var secureConfigurationPath = Path.Combine(unknownLegacyFieldRoot, "settings.secure.json");
+    var legacyConfigurationPath = Path.Combine(unknownLegacyFieldRoot, "settings.json");
+    var keyPath = Path.Combine(unknownLegacyFieldRoot, "master-key.v1");
+    var downloadPath = Path.Combine(unknownLegacyFieldRoot, "Downloads");
+    const string newerLegacySettings =
+        """
+        {
+          "DownloadDirectory": "C:\\Downloads",
+          "FutureSensitiveSetting": "preserve-this-value"
+        }
+        """;
+    await File.WriteAllTextAsync(legacyConfigurationPath, newerLegacySettings);
+    var unknownFieldConfiguration = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    Check(
+        await ThrowsAsync<InvalidDataException>(() => unknownFieldConfiguration.LoadAsync()),
+        "unknown legacy settings fields are rejected instead of discarded");
+    Check(
+        File.ReadAllText(legacyConfigurationPath) == newerLegacySettings &&
+        !File.Exists(secureConfigurationPath),
+        "a newer legacy settings schema is preserved without migration");
+}
+finally
+{
+    Directory.Delete(unknownLegacyFieldRoot, recursive: true);
+}
+
+var failedMigrationRoot = Path.Combine(
+    Path.GetTempPath(),
+    $"ipa-bridge-failed-migration-smoke-{Guid.NewGuid():N}");
+Directory.CreateDirectory(failedMigrationRoot);
+try
+{
+    var blockedSecurePath = Path.Combine(failedMigrationRoot, "settings.secure.json");
+    var legacyConfigurationPath = Path.Combine(failedMigrationRoot, "settings.json");
+    var keyPath = Path.Combine(failedMigrationRoot, "master-key.v1");
+    var downloadPath = Path.Combine(failedMigrationRoot, "Downloads");
+    Directory.CreateDirectory(blockedSecurePath);
+    await File.WriteAllTextAsync(
+        legacyConfigurationPath,
+        JsonSerializer.Serialize(new AppConfiguration
+        {
+            AppleAccountEmail = "preserve-on-failure@example.invalid",
+            DownloadDirectory = downloadPath
+        }));
+
+    var failedMigrationService = new ConfigurationService(
+        blockedSecurePath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    var migrationCommitFailed = false;
+    try
+    {
+        await failedMigrationService.LoadAsync();
+    }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+    {
+        migrationCommitFailed = true;
+    }
+
+    Check(migrationCommitFailed, "legacy migration surfaces an encrypted settings commit failure");
+    Check(
+        File.Exists(legacyConfigurationPath) &&
+        File.ReadAllText(legacyConfigurationPath)
+            .Contains("preserve-on-failure@example.invalid", StringComparison.Ordinal),
+        "failed legacy migration preserves the original plaintext configuration");
+    Check(
+        !Directory.EnumerateFiles(
+                failedMigrationRoot,
+                "settings.secure.json.*.tmp",
+                SearchOption.TopDirectoryOnly)
+            .Any(),
+        "failed legacy migration removes its encrypted temporary file");
+}
+finally
+{
+    Directory.Delete(failedMigrationRoot, recursive: true);
+}
+
+var productionKeyProtector = new WindowsCurrentUserKeyProtector();
+var productionRawKey = RandomNumberGenerator.GetBytes(LocalDataProtectionService.MasterKeySize);
+var productionProtectedKey = productionKeyProtector.Protect(productionRawKey);
+var productionUnprotectedKey = productionKeyProtector.Unprotect(productionProtectedKey);
+try
+{
+    Check(
+        !productionProtectedKey.AsSpan().SequenceEqual(productionRawKey),
+        "Windows CurrentUser protection does not persist the raw settings key");
+    Check(
+        productionUnprotectedKey.AsSpan().SequenceEqual(productionRawKey),
+        "Windows CurrentUser protection unlocks the settings key for the same user");
+}
+finally
+{
+    CryptographicOperations.ZeroMemory(productionRawKey);
+    CryptographicOperations.ZeroMemory(productionProtectedKey);
+    CryptographicOperations.ZeroMemory(productionUnprotectedKey);
 }
 
 var executable = Environment.ProcessPath;
@@ -751,3 +1190,40 @@ if (failures.Count > 0)
 Console.WriteLine();
 Console.WriteLine("All IPA Bridge smoke tests passed.");
 return 0;
+
+internal sealed class SmokeKeyProtector : ILocalDataKeyProtector
+{
+    public byte[]? LastProtectedPlaintext { get; private set; }
+
+    public byte[] Protect(byte[] data)
+    {
+        LastProtectedPlaintext = data.ToArray();
+        return data
+            .Reverse()
+            .Select(value => (byte)(value ^ 0xA5))
+            .ToArray();
+    }
+
+    public byte[] Unprotect(byte[] protectedData)
+    {
+        return protectedData
+            .Select(value => (byte)(value ^ 0xA5))
+            .Reverse()
+            .ToArray();
+    }
+}
+
+internal sealed class SmokeRandomByteGenerator : IRandomByteGenerator
+{
+    private int _requestCount;
+
+    public int RequestCount => _requestCount;
+
+    public byte[] GetBytes(int count)
+    {
+        var request = Interlocked.Increment(ref _requestCount);
+        return Enumerable.Range(0, count)
+            .Select(index => (byte)((index * 37 + request * 19) & 0xFF))
+            .ToArray();
+    }
+}
