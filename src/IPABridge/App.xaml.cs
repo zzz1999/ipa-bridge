@@ -52,10 +52,11 @@ public partial class App : Application
                 new Size(814, 506),
                 new Size(1180, 760)
             ];
+            var storeView = new StoreView();
             FrameworkElement[] views =
             [
                 new DashboardView(),
-                new StoreView(),
+                storeView,
                 new LibraryView(),
                 new DevicesView(),
                 new SettingsView()
@@ -73,6 +74,8 @@ public partial class App : Application
                     VerifyLayout(view);
                 }
             }
+
+            VerifyVerboseLoggingTipDismissal(storeView, viewModel.Store);
 
             if (_wpfBindingSmokeFailure is not null)
             {
@@ -146,6 +149,28 @@ public partial class App : Application
             throw new InvalidOperationException(
                 $"The {description} editor viewport is too short: " +
                 $"viewport={contentHost.ViewportHeight:F1}, font={input.FontSize:F1}.");
+        }
+    }
+
+    private static void VerifyVerboseLoggingTipDismissal(StoreView storeView, StoreViewModel viewModel)
+    {
+        if (storeView.VerboseLoggingTip.Visibility != Visibility.Visible)
+        {
+            throw new InvalidOperationException("The verbose logging tip is not visible by default.");
+        }
+
+        var dismissCommand = storeView.DismissVerboseLoggingTipButton.Command;
+        if (dismissCommand is null || !dismissCommand.CanExecute(null))
+        {
+            throw new InvalidOperationException("The verbose logging tip has no executable dismiss command.");
+        }
+
+        dismissCommand.Execute(null);
+        storeView.UpdateLayout();
+        if (viewModel.IsVerboseLoggingTipVisible ||
+            storeView.VerboseLoggingTip.Visibility != Visibility.Collapsed)
+        {
+            throw new InvalidOperationException("The verbose logging tip did not collapse after dismissal.");
         }
     }
 

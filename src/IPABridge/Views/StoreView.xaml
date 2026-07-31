@@ -271,14 +271,38 @@
             </StackPanel>
           </Border>
 
-          <Border Margin="0,18,0,0"
+          <Border x:Name="VerboseLoggingTip"
+                  Margin="0,18,0,0"
                   Padding="13"
                   Background="{StaticResource OrangeSoftBrush}"
-                  CornerRadius="13">
-            <TextBlock Style="{StaticResource CaptionTextStyle}"
-                       Foreground="#9A5A12"
-                       Text="Tip: Do not enable ipatool verbose logging; upstream verbose output may include authentication fields. IPA Bridge never enables it."
-                       TextWrapping="Wrap" />
+                  CornerRadius="13"
+                  Visibility="{Binding Store.IsVerboseLoggingTipVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Style="{StaticResource CaptionTextStyle}"
+                         Foreground="#9A5A12"
+                         Text="Tip: Do not enable ipatool verbose logging; upstream verbose output may include authentication fields. IPA Bridge never enables it."
+                         TextWrapping="Wrap" />
+              <Button x:Name="DismissVerboseLoggingTipButton"
+                      Grid.Column="1"
+                      Width="28"
+                      Height="28"
+                      Margin="8,-4,-4,0"
+                      Padding="0"
+                      VerticalAlignment="Top"
+                      AutomationProperties.Name="Dismiss verbose logging tip"
+                      Background="#169A5A12"
+                      Command="{Binding Store.DismissVerboseLoggingTipCommand}"
+                      Content="&#xE711;"
+                      FontFamily="{StaticResource SymbolFont}"
+                      FontSize="10"
+                      Foreground="#9A5A12"
+                      Style="{StaticResource GhostButtonStyle}"
+                      ToolTip="Dismiss tip" />
+            </Grid>
           </Border>
         </StackPanel>
       </ScrollViewer>

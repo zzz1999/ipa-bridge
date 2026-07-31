@@ -21,6 +21,7 @@ public sealed class StoreViewModel : ObservableObject
     private bool _isBusy;
     private bool _isLoggedIn;
     private bool _requiresTwoFactor;
+    private bool _isVerboseLoggingTipVisible = true;
     private string _statusMessage = "Install ipatool to connect to the App Store.";
     private string _operationTitle = string.Empty;
 
@@ -38,6 +39,7 @@ public sealed class StoreViewModel : ObservableObject
         SearchCommand = new AsyncRelayCommand(SearchAsync, CanSearch);
         DownloadCommand = new AsyncRelayCommand(DownloadAsync, CanDownload);
         LoadVersionsCommand = new AsyncRelayCommand(LoadVersionsAsync, CanDownload);
+        DismissVerboseLoggingTipCommand = new RelayCommand(() => IsVerboseLoggingTipVisible = false);
     }
 
     public event EventHandler<string>? IpaDownloaded;
@@ -55,6 +57,8 @@ public sealed class StoreViewModel : ObservableObject
     public AsyncRelayCommand DownloadCommand { get; }
 
     public AsyncRelayCommand LoadVersionsCommand { get; }
+
+    public RelayCommand DismissVerboseLoggingTipCommand { get; }
 
     public string Email
     {
@@ -166,6 +170,12 @@ public sealed class StoreViewModel : ObservableObject
     {
         get => _requiresTwoFactor;
         private set => SetProperty(ref _requiresTwoFactor, value);
+    }
+
+    public bool IsVerboseLoggingTipVisible
+    {
+        get => _isVerboseLoggingTipVisible;
+        private set => SetProperty(ref _isVerboseLoggingTipVisible, value);
     }
 
     public string StatusMessage
