@@ -147,9 +147,9 @@ public partial class StoreView : UserControl
     {
         TwoFactorCodeBox.Focus();
         TwoFactorCodeBox.SelectAll();
-        // Keep the action row visible after keyboard focus requests the smallest
-        // possible code-box viewport at compact window heights.
-        TwoFactorVerificationPanel.BringIntoView();
+        // The help block can make the panel taller than a compact viewport. Keep
+        // the verification action visible after focus scrolls to the code box.
+        TwoFactorVerifyButton.BringIntoView();
     }
 
     private void ApplePasswordBox_OnPasswordChanged(object sender, RoutedEventArgs e)

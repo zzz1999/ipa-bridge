@@ -400,6 +400,14 @@ public partial class App : Application
                     "The two-factor challenge does not replace the credential form with a usable rounded panel.");
             }
 
+            if (!mainViewModel.Store.RequestVerificationCodeCommand.CanExecute(null) ||
+                storeView.RequestVerificationCodeButton.ActualWidth < 128 ||
+                storeView.AppleVerificationHelpButton.ActualWidth < 112)
+            {
+                throw new InvalidOperationException(
+                    "The two-factor recovery actions are unavailable or their complete labels are clipped.");
+            }
+
             VerifyEditorViewport(storeView.TwoFactorCodeBox, "Apple verification code input");
             storeView.FocusTwoFactorVerificationInput();
             storeView.UpdateLayout();

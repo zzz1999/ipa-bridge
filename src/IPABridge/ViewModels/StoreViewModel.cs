@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using IPABridge.Infrastructure;
 using IPABridge.Models;
@@ -9,6 +10,7 @@ namespace IPABridge.ViewModels;
 
 public sealed class StoreViewModel : ObservableObject
 {
+    internal const string AppleVerificationHelpUrl = "https://support.apple.com/102606";
     private readonly ConfigurationService _configurationService;
     private readonly IpatoolService _ipatoolService;
     private readonly Action<string, string, bool> _addActivity;
@@ -45,6 +47,10 @@ public sealed class StoreViewModel : ObservableObject
         _addActivity = addActivity;
 
         LoginCommand = new AsyncRelayCommand(LoginAsync, CanLogin);
+        RequestVerificationCodeCommand = new AsyncRelayCommand(
+            RequestVerificationCodeAsync,
+            CanRequestVerificationCode);
+        OpenAppleVerificationHelpCommand = new RelayCommand(OpenAppleVerificationHelp);
         CheckAccountCommand = new AsyncRelayCommand(CheckAccountAsync, CanCheckAccount);
         SearchCommand = new AsyncRelayCommand(SearchAsync, CanSearch);
         DownloadCommand = new AsyncRelayCommand(DownloadAsync, CanDownload);
@@ -78,6 +84,10 @@ public sealed class StoreViewModel : ObservableObject
     public ObservableCollection<AppleAccountProfile> Accounts { get; } = [];
 
     public AsyncRelayCommand LoginCommand { get; }
+
+    public AsyncRelayCommand RequestVerificationCodeCommand { get; }
+
+    public RelayCommand OpenAppleVerificationHelpCommand { get; }
 
     public AsyncRelayCommand CheckAccountCommand { get; }
 
@@ -920,6 +930,32 @@ public sealed class StoreViewModel : ObservableObject
                (!RequiresTwoFactor || IsSixDigitVerificationCode(TwoFactorCode));
     }
 
+    private bool CanRequestVerificationCode()
+    {
+        return RequiresTwoFactor &&
+               !IsBusy &&
+               _ipatoolService.IsAvailable &&
+               (IsAddingAccount || SelectedAccount is not null) &&
+               !string.IsNullOrWhiteSpace(Email) &&
+               !string.IsNullOrWhiteSpace(ApplePassword);
+    }
+
+    private void OpenAppleVerificationHelp()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(AppleVerificationHelpUrl)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not open Apple verification help: {exception.Message}";
+            _addActivity("Apple verification help failed", exception.Message, false);
+        }
+    }
+
     private bool CanCheckAccount()
     {
         return !IsBusy &&
@@ -950,7 +986,18 @@ public sealed class StoreViewModel : ObservableObject
                HasLocalVaultKey(SelectedAccount);
     }
 
-    private async Task LoginAsync()
+    private Task LoginAsync()
+    {
+        return SignInAsync(requestAnotherVerificationCode: false);
+    }
+
+    private Task RequestVerificationCodeAsync()
+    {
+        TwoFactorCode = string.Empty;
+        return SignInAsync(requestAnotherVerificationCode: true);
+    }
+
+    private async Task SignInAsync(bool requestAnotherVerificationCode)
     {
         var requestedEmail = Email.Trim();
         var matchingAccount = IsAddingAccount
@@ -986,14 +1033,19 @@ public sealed class StoreViewModel : ObservableObject
         // A login attempt can replace the isolated ipatool session. Require a
         // fresh confirmed identity before showing the connected state again.
         SetActiveAccount(null);
-        await RunBusyAsync("Signing in securely…", async cancellationToken =>
+        var operationTitle = requestAnotherVerificationCode
+            ? "Requesting another verification code…"
+            : "Signing in securely…";
+        await RunBusyAsync(operationTitle, async cancellationToken =>
         {
             var wasVerifyingTwoFactor = RequiresTwoFactor;
             var localVaultKey = PrepareLocalVaultKey(account);
             var result = await _ipatoolService.LoginAsync(
                 account,
                 ApplePassword,
-                string.IsNullOrWhiteSpace(TwoFactorCode) ? null : TwoFactorCode.Trim(),
+                requestAnotherVerificationCode || string.IsNullOrWhiteSpace(TwoFactorCode)
+                    ? null
+                    : TwoFactorCode.Trim(),
                 localVaultKey,
                 cancellationToken);
             RequiresTwoFactor = result.RequiresTwoFactor ||
@@ -1005,7 +1057,9 @@ public sealed class StoreViewModel : ObservableObject
                 OnPropertyChanged(nameof(RequiresTwoFactor));
             }
 
-            StatusMessage = BuildLoginStatusMessage(result, wasVerifyingTwoFactor);
+            StatusMessage = requestAnotherVerificationCode && result.RequiresTwoFactor
+                ? "Apple was asked for another verification code. Approve the new sign-in alert on a trusted device; Apple might not send an SMS automatically."
+                : BuildLoginStatusMessage(result, wasVerifyingTwoFactor);
             if (result.Success && result.Account is not null)
             {
                 _ipatoolService.InvalidateAccountCache(account);
@@ -1339,6 +1393,7 @@ public sealed class StoreViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(SearchActionHelp));
         LoginCommand.NotifyCanExecuteChanged();
+        RequestVerificationCodeCommand.NotifyCanExecuteChanged();
         CheckAccountCommand.NotifyCanExecuteChanged();
         SearchCommand.NotifyCanExecuteChanged();
         DownloadCommand.NotifyCanExecuteChanged();

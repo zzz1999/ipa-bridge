@@ -239,7 +239,7 @@ public sealed partial class IpatoolService
             return new IpatoolLoginResult(
                 false,
                 true,
-                "An Apple two-factor authentication code is required. Enter the code and sign in again.");
+                "Apple requested two-factor authentication. Approve the sign-in alert on a trusted device to reveal the code; Apple might not send an SMS automatically.");
         }
 
         if (result.MissingPromptKey == "vault-passphrase")

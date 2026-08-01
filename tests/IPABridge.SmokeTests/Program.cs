@@ -1755,6 +1755,27 @@ else
                 LocalDataProtectionService.MasterKeySize,
                 "the first sign-in keeps the Apple password and one generated 256-bit vault key only in memory while awaiting two-factor verification");
 
+            twoFactorStore.TwoFactorCode = "123";
+            Check(
+                twoFactorStore.RequestVerificationCodeCommand.CanExecute(null) &&
+                StoreViewModel.AppleVerificationHelpUrl == "https://support.apple.com/102606",
+                "two-factor recovery exposes another Apple request and official verification help");
+            await twoFactorStore.RequestVerificationCodeCommand.ExecuteAsync();
+            var retriedVaultKey = typeof(StoreViewModel)
+                .GetField(
+                    "_transientLocalVaultKey",
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(twoFactorStore) as string;
+            Check(
+                twoFactorStore.RequiresTwoFactor &&
+                twoFactorStore.ApplePassword == "temporary-apple-secret" &&
+                twoFactorStore.TwoFactorCode.Length == 0 &&
+                retriedVaultKey == transientVaultKey &&
+                twoFactorStore.StatusMessage ==
+                "Apple was asked for another verification code. Approve the new sign-in alert on a trusted device; Apple might not send an SMS automatically.",
+                "requesting another verification code preserves the pending secret state and starts a fresh Apple sign-in alert");
+
             twoFactorStore.CancelTwoFactorCommand.Execute(null);
             Check(
                 !twoFactorStore.RequiresTwoFactor &&

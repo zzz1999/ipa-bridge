@@ -540,8 +540,41 @@
                              Text="Enter verification code" />
                   <TextBlock Margin="0,5,0,0"
                              Style="{StaticResource CaptionTextStyle}"
-                             Text="Enter the 6-digit code sent to your trusted Apple device or phone number."
+                             Text="Approve the sign-in alert on a trusted Apple device, then enter the 6-digit code it displays. Trusted phone numbers do not automatically receive an SMS."
                              TextWrapping="Wrap" />
+                  <Border Margin="0,12,0,0"
+                          Padding="12"
+                          Background="#8AFFFFFF"
+                          CornerRadius="14">
+                    <StackPanel>
+                      <TextBlock FontWeight="SemiBold" Text="Didn't get a code?" />
+                      <TextBlock Margin="0,4,0,0"
+                                 Style="{StaticResource CaptionTextStyle}"
+                                 Text="Check every trusted device. Requesting again starts another Apple sign-in alert; Apple controls whether a code appears on a device, by text, or by phone call."
+                                 TextWrapping="Wrap" />
+                      <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="*" />
+                          <ColumnDefinition Width="8" />
+                          <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="RequestVerificationCodeButton"
+                                MinWidth="128"
+                                AutomationProperties.HelpText="Starts another Apple two-factor sign-in request. Apple controls code delivery."
+                                AutomationProperties.Name="Request another Apple verification code"
+                                Command="{Binding Store.RequestVerificationCodeCommand}"
+                                Content="Request Again"
+                                Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button x:Name="AppleVerificationHelpButton"
+                                Grid.Column="2"
+                                MinWidth="112"
+                                AutomationProperties.Name="Open Apple's verification code help"
+                                Command="{Binding Store.OpenAppleVerificationHelpCommand}"
+                                Content="Apple Help ↗"
+                                Style="{StaticResource SecondaryButtonStyle}" />
+                      </Grid>
+                    </StackPanel>
+                  </Border>
                   <TextBox x:Name="TwoFactorCodeBox"
                            Margin="0,14,0,0"
                            MaxLength="6"

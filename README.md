@@ -102,7 +102,7 @@ If WinGet is unavailable, Microsoft Store requires interactive authentication, a
 ### Search for and download an app
 
 1. Select **Add Apple Account**, then enter the account email and Apple password.
-2. Select **Add & Sign In**. IPA Bridge creates a random 256-bit key for that profile automatically. If Apple requests two-factor authentication, a separate panel appears; enter the six-digit code and select **Verify & Continue**.
+2. Select **Add & Sign In**. IPA Bridge creates a random 256-bit key for that profile automatically. If Apple requests two-factor authentication, approve the sign-in alert on a trusted Apple device, enter its six-digit code, and select **Verify & Continue**. Apple does not automatically text every trusted phone number. If no alert appears, use **Request Again** to start another Apple sign-in request or open the linked [Apple verification-code help](https://support.apple.com/102606).
 3. Repeat the first two steps for any additional accounts.
 4. In **Account for search and purchase**, select the account whose App Store you want to use. On later launches, IPA Bridge automatically restores a valid isolated session with the encrypted generated key; **Check Session** remains available for an explicit retry or diagnostic check.
 5. Enter an app name, search, and select the target app. Search results come from the App Store region Apple assigned to the selected account when it signed in.
