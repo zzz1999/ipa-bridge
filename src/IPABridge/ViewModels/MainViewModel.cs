@@ -220,6 +220,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         InitializationStatus = "Checking tools…";
         await Settings.RefreshStatusAsync();
 
+        InitializationStatus = "Restoring Apple Account session…";
+        await Store.RestoreSelectedAccountSessionAsync();
+
         InitializationStatus = "Scanning IPAs…";
         await Library.RefreshAsync();
 
@@ -240,6 +243,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async Task RefreshAllAsync()
     {
         await Settings.RefreshStatusAsync();
+        await Store.RestoreSelectedAccountSessionAsync();
         await Library.RefreshAsync();
         await Devices.RefreshAsync();
         OnPropertyChanged(nameof(OverallReadiness));

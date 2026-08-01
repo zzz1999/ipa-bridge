@@ -30,17 +30,23 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel x:Name="HeroContent" VerticalAlignment="Center">
-              <Border Width="112"
+              <Border x:Name="PlatformBadge"
+                      MinWidth="112"
+                      MinHeight="36"
                       Margin="0,0,0,15"
-                      Padding="12,6"
+                      Padding="14,7"
                       HorizontalAlignment="Left"
                       Background="#27FFFFFF"
-                      CornerRadius="14">
-                <TextBlock HorizontalAlignment="Center"
+                      CornerRadius="18"
+                      UseLayoutRounding="True">
+                <TextBlock x:Name="PlatformBadgeText"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
                            FontSize="12"
                            FontWeight="Bold"
                            Foreground="White"
-                           Text="WINDOWS / iOS" />
+                           Text="WINDOWS / iOS"
+                           TextWrapping="NoWrap" />
               </Border>
               <TextBlock FontSize="31"
                          FontWeight="Bold"

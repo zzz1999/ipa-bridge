@@ -15,6 +15,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private readonly SystemPrerequisiteService _prerequisiteService;
     private readonly DeviceEnvironmentOperationGate _deviceEnvironmentGate;
     private readonly Action<string, string, bool> _addActivity;
+    private readonly ApplicationUpdateService _applicationUpdateService;
     private string _ipatoolStatus = "Checking";
     private string _deviceToolsStatus = "Checking";
     private string _installationStage = string.Empty;
@@ -25,6 +26,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         "You can also choose an existing ipatool.exe in Settings.";
     private string _statusMessage =
         "Settings and generated profile keys are encrypted locally. Apple passwords and verification codes are not saved.";
+    private string _updateStatusMessage;
+    private string _latestReleaseUrl = string.Empty;
+    private bool _isCheckingForUpdates;
+    private bool _hasReleaseInformation;
+    private bool _isUpdateAvailable;
 
     public SettingsViewModel(
         ConfigurationService configurationService,
@@ -33,7 +39,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         IpatoolService ipatoolService,
         SystemPrerequisiteService prerequisiteService,
         DeviceEnvironmentOperationGate deviceEnvironmentGate,
-        Action<string, string, bool> addActivity)
+        Action<string, string, bool> addActivity,
+        ApplicationUpdateService? applicationUpdateService = null)
     {
         _configurationService = configurationService;
         _toolLocationService = toolLocationService;
@@ -42,6 +49,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _prerequisiteService = prerequisiteService;
         _deviceEnvironmentGate = deviceEnvironmentGate;
         _addActivity = addActivity;
+        _applicationUpdateService = applicationUpdateService ?? new ApplicationUpdateService();
+        _updateStatusMessage =
+            $"{_applicationUpdateService.CurrentBuildLabel}. Check GitHub for the newest published executable.";
 
         InstallIpatoolCommand = new AsyncRelayCommand(
             InstallIpatoolAsync,
@@ -62,6 +72,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         SaveCommand = new AsyncRelayCommand(
             SaveAsync,
             exceptionHandler: exception => ReportError("Could not save settings", exception));
+        CheckForUpdatesCommand = new AsyncRelayCommand(
+            CheckForUpdatesAsync,
+            () => !IsCheckingForUpdates,
+            exception => ReportUpdateError(exception));
+        OpenLatestReleaseCommand = new RelayCommand(
+            () => OpenUri(LatestReleaseUrl),
+            () => HasReleaseInformation);
         OpenAppleDevicesHelpCommand = new RelayCommand(() =>
             OpenUri("https://support.apple.com/guide/devices-windows/install-the-apple-devices-app-mchl5ded2763/windows"));
         OpenIpatoolSourceCommand = new RelayCommand(() =>
@@ -87,6 +104,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public AsyncRelayCommand RefreshAppleDeviceSupportCommand { get; }
 
     public AsyncRelayCommand SaveCommand { get; }
+
+    public AsyncRelayCommand CheckForUpdatesCommand { get; }
+
+    public RelayCommand OpenLatestReleaseCommand { get; }
 
     public RelayCommand OpenAppleDevicesHelpCommand { get; }
 
@@ -218,6 +239,50 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _statusMessage, value);
     }
 
+    public string CurrentBuildLabel => _applicationUpdateService.CurrentBuildLabel;
+
+    public string UpdateStatusMessage
+    {
+        get => _updateStatusMessage;
+        private set => SetProperty(ref _updateStatusMessage, value);
+    }
+
+    public string LatestReleaseUrl
+    {
+        get => _latestReleaseUrl;
+        private set => SetProperty(ref _latestReleaseUrl, value);
+    }
+
+    public bool IsCheckingForUpdates
+    {
+        get => _isCheckingForUpdates;
+        private set
+        {
+            if (SetProperty(ref _isCheckingForUpdates, value))
+            {
+                CheckForUpdatesCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool HasReleaseInformation
+    {
+        get => _hasReleaseInformation;
+        private set
+        {
+            if (SetProperty(ref _hasReleaseInformation, value))
+            {
+                OpenLatestReleaseCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool IsUpdateAvailable
+    {
+        get => _isUpdateAvailable;
+        private set => SetProperty(ref _isUpdateAvailable, value);
+    }
+
     public bool IsIpatoolAvailable => _toolLocationService.ResolveIpatool() is not null;
 
     public bool AreDeviceToolsAvailable => _toolLocationService.ResolveDeviceTools().IsAvailable;
@@ -277,6 +342,42 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         {
             // The local status remains available even if the activity feed is shutting down.
         }
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        IsCheckingForUpdates = true;
+        UpdateStatusMessage = "Checking GitHub Releases…";
+        try
+        {
+            var result = await _applicationUpdateService.CheckAsync();
+            LatestReleaseUrl = result.ReleaseUrl;
+            HasReleaseInformation = true;
+            IsUpdateAvailable = result.IsUpdateAvailable;
+            UpdateStatusMessage = !result.CanCompareBuilds
+                ? $"Latest release: {result.ReleaseName}, published {result.PublishedAt:yyyy-MM-dd}. " +
+                  "This development build has no release revision to compare."
+                : result.IsUpdateAvailable
+                    ? $"Update available: {result.ReleaseName}, published {result.PublishedAt:yyyy-MM-dd}."
+                    : $"IPA Bridge is up to date: {result.ReleaseName}.";
+            _addActivity(
+                "Software update check",
+                UpdateStatusMessage,
+                !result.IsUpdateAvailable);
+        }
+        finally
+        {
+            IsCheckingForUpdates = false;
+        }
+    }
+
+    private void ReportUpdateError(Exception exception)
+    {
+        LatestReleaseUrl = string.Empty;
+        HasReleaseInformation = false;
+        IsUpdateAvailable = false;
+        UpdateStatusMessage = $"Could not check GitHub Releases: {exception.Message}";
+        _addActivity("Software update check failed", exception.Message, false);
     }
 
     private async Task InstallIpatoolAsync()

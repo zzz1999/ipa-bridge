@@ -58,14 +58,16 @@ public partial class App : Application
                 new Size(814, 506),
                 new Size(1180, 760)
             ];
+            var dashboardView = new DashboardView();
             var storeView = new StoreView();
+            var settingsView = new SettingsView();
             FrameworkElement[] views =
             [
-                new DashboardView(),
+                dashboardView,
                 storeView,
                 new LibraryView(),
                 new DevicesView(),
-                new SettingsView()
+                settingsView
             ];
 
             foreach (var view in views)
@@ -140,6 +142,19 @@ public partial class App : Application
                 throw new InvalidOperationException(
                     $"Dashboard hero content is clipped: content={contentBounds}, padded range={paddedTop:F1}-{paddedBottom:F1}.");
             }
+
+            if (dashboard.PlatformBadge.ActualWidth + 0.5 <
+                    dashboard.PlatformBadgeText.ActualWidth +
+                    dashboard.PlatformBadge.Padding.Left +
+                    dashboard.PlatformBadge.Padding.Right ||
+                dashboard.PlatformBadge.ActualHeight + 0.5 <
+                    dashboard.PlatformBadgeText.ActualHeight +
+                    dashboard.PlatformBadge.Padding.Top +
+                    dashboard.PlatformBadge.Padding.Bottom)
+            {
+                throw new InvalidOperationException(
+                    "The platform badge does not expand to contain its complete label.");
+            }
         }
 
         if (view is StoreView store)
@@ -203,6 +218,48 @@ public partial class App : Application
                 throw new InvalidOperationException(
                     "The connected-device refresh action has an undersized hit target.");
             }
+        }
+
+        if (view is SettingsView settings)
+        {
+            var localPreferencesBounds = settings.LocalPreferencesCard
+                .TransformToAncestor(settings.SettingsScrollViewer)
+                .TransformBounds(new Rect(settings.LocalPreferencesCard.RenderSize));
+            if (localPreferencesBounds.Left < 13.5)
+            {
+                throw new InvalidOperationException(
+                    "The Settings card does not reserve enough left-side space for its shadow.");
+            }
+
+            VerifyElementsDoNotOverlap(
+                settings.SettingsStatusText,
+                settings.SaveSettingsButton,
+                settings.LocalPreferencesCard,
+                "Settings status and Save Settings action");
+            VerifyElementsDoNotOverlap(
+                settings.SoftwareUpdateStatusText,
+                settings.CheckForUpdatesButton,
+                settings.SoftwareUpdateCard,
+                "software-update status and action");
+        }
+    }
+
+    private static void VerifyElementsDoNotOverlap(
+        FrameworkElement leadingElement,
+        FrameworkElement trailingElement,
+        FrameworkElement ancestor,
+        string description)
+    {
+        var leadingBounds = leadingElement
+            .TransformToAncestor(ancestor)
+            .TransformBounds(new Rect(leadingElement.RenderSize));
+        var trailingBounds = trailingElement
+            .TransformToAncestor(ancestor)
+            .TransformBounds(new Rect(trailingElement.RenderSize));
+        if (leadingBounds.Right > trailingBounds.Left + 0.5)
+        {
+            throw new InvalidOperationException(
+                $"The {description} overlap: leading={leadingBounds}, trailing={trailingBounds}.");
         }
     }
 

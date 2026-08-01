@@ -40,6 +40,10 @@ Profile removal is a recoverable local transaction. `IpatoolService` first moves
 
 Login records the storefront returned by Apple in the selected profile's ipatool account record. Search, license acquisition, version lookup, and download all execute in that same profile environment, so they use that Apple-assigned storefront. IPA Bridge does not infer a country from an email address, IP address, or Windows locale. Before every authenticated App Store operation, `auth info` must return the email assigned to the selected profile; a missing or mismatched session stops the operation and clears the connected state.
 
+After configuration and tool status load, startup runs the same `auth info` identity check for the selected profile and supplies its generated vault key from encrypted settings. A valid isolated session therefore becomes active without another Apple password prompt. The password is requested again only when the local session is absent, belongs to another account, or Apple has invalidated it.
+
+Long JSON events returned through ConPTY are parsed as balanced JSON objects rather than individual terminal rows. This reconstructs soft-wrapped `ipatool` search output without enabling verbose logging or persisting raw authentication output.
+
 ## Historical version metadata
 
 `ipatool list-versions` returns opaque external version identifiers. IPA Bridge keeps those identifiers as strings, then resolves each one with `get-version-metadata` to obtain the human-readable `displayVersion` and `releaseDate` fields. At most two metadata processes run concurrently because the upstream command performs partial IPA range requests for each version.

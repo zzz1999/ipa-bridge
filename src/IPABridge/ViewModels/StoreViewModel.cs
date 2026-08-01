@@ -444,6 +444,16 @@ public sealed class StoreViewModel : ObservableObject
             : "Install the official ipatool from Settings first.";
     }
 
+    public async Task RestoreSelectedAccountSessionAsync()
+    {
+        if (!CanCheckAccount())
+        {
+            return;
+        }
+
+        await CheckAccountCoreAsync("Restoring saved Apple Account session…");
+    }
+
     public void RefreshToolAvailability()
     {
         if (!_ipatoolService.IsAvailable)
@@ -1111,7 +1121,12 @@ public sealed class StoreViewModel : ObservableObject
         TwoFactorCode = string.Empty;
     }
 
-    private async Task CheckAccountAsync()
+    private Task CheckAccountAsync()
+    {
+        return CheckAccountCoreAsync("Checking account…");
+    }
+
+    private async Task CheckAccountCoreAsync(string operationTitle)
     {
         var account = SelectedAccount;
         if (account is null)
@@ -1120,7 +1135,7 @@ public sealed class StoreViewModel : ObservableObject
         }
 
         SetActiveAccount(null);
-        await RunBusyAsync("Checking account…", async cancellationToken =>
+        await RunBusyAsync(operationTitle, async cancellationToken =>
         {
             var accountInfo = await _ipatoolService.GetStoredAccountAsync(
                 account,

@@ -33,6 +33,7 @@ The project is currently an early preview intended for personal testing and deve
 | Device connection | Enumerate USB or Wi-Fi devices, read the device name, model, and iOS version, and initiate and verify trust pairing |
 | IPA installation | Install an IPA on a selected paired device, retain recent low-level output, show progress when the backend reports a percentage, support stopping the wait, and enforce a 20-minute timeout |
 | Tool management | Install verified official ipatool builds and a pinned `jkcoxson/idevice` release, or use a user-supplied `libimobiledevice` tool directory |
+| Software updates | Query this repository's published GitHub Releases, ignore drafts and prereleases, require the `IPA-Bridge.exe` asset, and compare its release commit with the revision embedded in the running executable |
 | Windows distribution | Produce a self-contained, single-file Windows x64 executable that does not require a separate .NET Runtime installation |
 
 ## Download and run
@@ -103,7 +104,7 @@ If WinGet is unavailable, Microsoft Store requires interactive authentication, a
 1. Select **Add Apple Account**, then enter the account email and Apple password.
 2. Select **Add & Sign In**. IPA Bridge creates a random 256-bit key for that profile automatically. If Apple requests two-factor authentication, a separate panel appears; enter the six-digit code and select **Verify & Continue**.
 3. Repeat the first two steps for any additional accounts.
-4. In **Account for search and purchase**, select the account whose App Store you want to use, then select **Check Session** if its connected state has not yet been verified. The generated local key is supplied automatically.
+4. In **Account for search and purchase**, select the account whose App Store you want to use. On later launches, IPA Bridge automatically restores a valid isolated session with the encrypted generated key; **Check Session** remains available for an explicit retry or diagnostic check.
 5. Enter an app name, search, and select the target app. Search results come from the App Store region Apple assigned to the selected account when it signed in.
 6. Download the latest version directly, or select **Load version history** first when an older version is needed. The license request and download use the same selected account.
 7. A completed download appears automatically in the IPA library.
@@ -111,6 +112,8 @@ If WinGet is unavailable, Microsoft Store requires interactive authentication, a
 IPA Bridge never asks a new user to invent or remember an ipatool vault passphrase. The application generates a different 256-bit local vault key for each profile, stores it only inside the AES-256-GCM encrypted settings envelope, and supplies it to ipatool through ConPTY when required. Apple Account passwords and two-factor codes remain memory-only and are cleared after success, cancellation, or leaving the App Store page.
 
 Every profile receives a separate ipatool home below `%LOCALAPPDATA%\IPA Bridge\Accounts`, so its account record, cookie jar, and Apple-provided storefront cannot be mixed with another profile. IPA Bridge does not infer a country from the email address, IP address, or Windows region. Search returns no more than 25 results. During download, ipatool requests a license for the selected account, but paid apps, delisted apps, regional restrictions, missing account entitlement, or unavailable historical packages can still cause the operation to fail.
+
+The **Software Update** card in Settings queries the repository's Releases API only when **Check for Updates** is selected. IPA Bridge chooses the newest normal published release that contains `IPA-Bridge.exe`, compares its target commit with the revision embedded by GitHub Actions, and opens only a validated `https://github.com/zzz1999/ipa-bridge/releases/...` page. It does not silently replace the running executable.
 
 ### Inspect historical-version metadata
 

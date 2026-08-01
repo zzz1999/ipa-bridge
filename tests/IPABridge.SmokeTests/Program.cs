@@ -77,12 +77,29 @@ if (fakeIpatoolMode == "login-wait")
 
 if (fakeIpatoolMode is "download-failure" or
     "download-success" or
+    "session-restore" or
     "search-success" or
     "search-unicode")
 {
     Console.Write("enter passphrase to unlock");
     var passphrase = Console.ReadLine();
-    if (passphrase != "temporary-vault-secret")
+    var validRestoredVaultKey = false;
+    if (fakeIpatoolMode == "session-restore" && passphrase is not null)
+    {
+        try
+        {
+            validRestoredVaultKey =
+                Convert.FromBase64String(passphrase).Length == LocalDataProtectionService.MasterKeySize;
+        }
+        catch (FormatException)
+        {
+            validRestoredVaultKey = false;
+        }
+    }
+
+    if (fakeIpatoolMode == "session-restore"
+            ? !validRestoredVaultKey
+            : passphrase != "temporary-vault-secret")
     {
         Console.WriteLine("{\"level\":\"error\",\"error\":\"wrong passphrase\",\"success\":false}");
         return 3;
@@ -91,8 +108,11 @@ if (fakeIpatoolMode is "download-failure" or
     if (args.Contains("auth", StringComparer.Ordinal) &&
         args.Contains("info", StringComparer.Ordinal))
     {
+        var accountEmail = fakeIpatoolMode == "session-restore"
+            ? "twofactor@example.invalid"
+            : "cleanup@example.invalid";
         Console.WriteLine(
-            "{\"level\":\"info\",\"name\":\"Smoke Account\",\"email\":\"cleanup@example.invalid\",\"success\":true}");
+            $"{{\"level\":\"info\",\"name\":\"Smoke Account\",\"email\":\"{accountEmail}\",\"success\":true}}");
         return 0;
     }
 
@@ -319,12 +339,69 @@ var apps = IpatoolJsonParser.ParseSearchResults(searchOutput);
 Check(apps.Count == 2, "ipatool JSON Lines search count");
 Check(apps[0].BundleIdentifier == "com.example.first", "ipatool bundle identifier contract");
 Check(apps[1].Price == 1.99, "ipatool numeric price contract");
+const string conPtyWrappedSearchOutput =
+    "enter passphrase to unlock[REDACTED]\r\n" +
+    "{\"level\":\"info\",\"count\":1,\"apps\":[{\"id\":444934666,\"bundleID\":\"com.tencent.mo\r\n" +
+    "bileqq\",\"name\":\"QQ\",\"version\":\"9.2.5\",\"price\":0}]}\r\n";
+var wrappedApps = IpatoolJsonParser.ParseSearchResults(conPtyWrappedSearchOutput);
+Check(
+    wrappedApps.Count == 1 &&
+    wrappedApps[0].BundleIdentifier == "com.tencent.mobileqq" &&
+    wrappedApps[0].Name == "QQ",
+    "ConPTY-wrapped ipatool search JSON is reconstructed before parsing");
 Check(
     IpatoolJsonParser.ParseSearchResults("""{"level":"info","count":0,"apps":[]}""").Count == 0,
     "ipatool valid empty search contract");
 Check(
     Throws<InvalidDataException>(() => IpatoolJsonParser.ParseSearchResults("""{"level":"info"}""")),
     "ipatool missing search contract is rejected");
+
+var currentRevision = new string('a', 40);
+var latestRevision = new string('b', 40);
+var releaseJson =
+    $$"""
+    [
+      {
+        "name": "Ignored prerelease",
+        "tag_name": "preview",
+        "html_url": "https://github.com/zzz1999/ipa-bridge/releases/tag/preview",
+        "target_commitish": "{{latestRevision}}",
+        "published_at": "2026-07-31T00:00:00Z",
+        "draft": false,
+        "prerelease": true,
+        "assets": [{ "name": "IPA-Bridge.exe" }]
+      },
+      {
+        "name": "IPA Bridge Automatic Build #19",
+        "tag_name": "auto-build-test-1",
+        "html_url": "https://github.com/zzz1999/ipa-bridge/releases/tag/auto-build-test-1",
+        "target_commitish": "{{latestRevision}}",
+        "published_at": "2026-08-01T12:00:00Z",
+        "draft": false,
+        "prerelease": false,
+        "assets": [{ "name": "IPA-Bridge.exe" }]
+      }
+    ]
+    """;
+var updateHandler = new StaticJsonMessageHandler(releaseJson);
+var updateService = new ApplicationUpdateService(
+    new HttpClient(updateHandler),
+    currentRevision);
+var updateResult = await updateService.CheckAsync();
+Check(
+    updateResult.IsUpdateAvailable &&
+    updateResult.CanCompareBuilds &&
+    updateResult.ReleaseCommit == latestRevision &&
+    updateResult.ReleaseTag == "auto-build-test-1" &&
+    updateHandler.LastRequestUri?.AbsoluteUri == ApplicationUpdateService.ReleasesApiUrl,
+    "the update checker selects the newest normal GitHub release containing IPA-Bridge.exe");
+var currentBuildService = new ApplicationUpdateService(
+    new HttpClient(new StaticJsonMessageHandler(releaseJson)),
+    latestRevision);
+Check(
+    !(await currentBuildService.CheckAsync()).IsUpdateAvailable &&
+    currentBuildService.CurrentBuildLabel == $"Build {latestRevision[..7]}",
+    "the update checker recognizes the currently published commit");
 
 var accountInfo = IpatoolJsonParser.ParseAccountInfo(
     """{"level":"info","name":"Example User","email":"user@example.invalid","success":true}""");
@@ -1749,10 +1826,32 @@ else
                 twoFactorDownloadPath,
                 new SmokeKeyProtector(),
                 new SmokeRandomByteGenerator());
+            var reopenedTwoFactorSettings = await reopenedTwoFactorConfiguration.LoadAsync();
             Check(
-                (await reopenedTwoFactorConfiguration.LoadAsync())
-                    .AppleAccounts.Single().LocalVaultKey == transientVaultKey,
+                reopenedTwoFactorSettings.AppleAccounts.Single().LocalVaultKey == transientVaultKey,
                 "the encrypted generated vault key is available after restart without another user prompt");
+
+            var restoredTwoFactorIpatool = new IpatoolService(
+                new ToolLocationService(reopenedTwoFactorConfiguration),
+                new ProcessRunner(),
+                new ConPtyProcessRunner(),
+                twoFactorSessions);
+            var restoredTwoFactorStore = new StoreViewModel(
+                reopenedTwoFactorConfiguration,
+                restoredTwoFactorIpatool,
+                (_, _, _) => { });
+            restoredTwoFactorStore.LoadConfiguration();
+            restoredTwoFactorStore.SearchQuery = "QQ";
+            Environment.SetEnvironmentVariable(
+                "IPA_BRIDGE_SMOKE_FAKE_IPATOOL",
+                "session-restore");
+            await restoredTwoFactorStore.RestoreSelectedAccountSessionAsync();
+            Check(
+                restoredTwoFactorStore.IsLoggedIn &&
+                restoredTwoFactorStore.SearchCommand.CanExecute(null) &&
+                restoredTwoFactorStore.ApplePassword.Length == 0 &&
+                restoredTwoFactorStore.TwoFactorCode.Length == 0,
+                "a valid encrypted Apple Account session is restored after restart without another password prompt");
         }
         finally
         {
@@ -2316,5 +2415,22 @@ internal sealed class SmokeRandomByteGenerator : IRandomByteGenerator
         return Enumerable.Range(0, count)
             .Select(index => (byte)((index * 37 + request * 19) & 0xFF))
             .ToArray();
+    }
+}
+
+internal sealed class StaticJsonMessageHandler(string json) : HttpMessageHandler
+{
+    public Uri? LastRequestUri { get; private set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        LastRequestUri = request.RequestUri;
+        return Task.FromResult(new HttpResponseMessage
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        });
     }
 }

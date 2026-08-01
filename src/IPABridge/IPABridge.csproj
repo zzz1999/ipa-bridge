@@ -12,6 +12,9 @@
     <Description>A modern Windows interface for ipatool and iOS device installation.</Description>
     <Company>IPA Bridge Contributors</Company>
     <Version>0.1.0</Version>
+    <IPABridgeSourceRevision Condition="'$(GITHUB_SHA)' != ''">$(GITHUB_SHA)</IPABridgeSourceRevision>
+    <IPABridgeSourceRevision Condition="'$(IPABridgeSourceRevision)' == ''">development</IPABridgeSourceRevision>
+    <InformationalVersion>$(Version)+$(IPABridgeSourceRevision)</InformationalVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\IPA-Bridge.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
