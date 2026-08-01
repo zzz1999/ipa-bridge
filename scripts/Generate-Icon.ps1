@@ -11,24 +11,12 @@ $geometry = [ordered]@{
     BackgroundY = 8
     BackgroundSize = 240
     BackgroundRadius = 57
-    LeftPylonBottomX = 77
-    LeftPylonBottomY = 184
-    LeftPylonTopX = 116
-    LeftPylonTopY = 102
-    RightPylonTopX = 140
-    RightPylonTopY = 102
-    RightPylonBottomX = 179
-    RightPylonBottomY = 184
-    DeckStartX = 91
-    DeckStartY = 164
-    DeckControlOneX = 111
-    DeckControlOneY = 151
-    DeckControlTwoX = 145
-    DeckControlTwoY = 151
-    DeckEndX = 165
-    DeckEndY = 164
-    PylonWidth = 22
-    DeckWidth = 16
+    HaloCenterX = 128
+    HaloCenterY = 128
+    HaloRadius = 68
+    HaloWidth = 22
+    HaloSegmentDegrees = 1
+    HaloGapDegrees = 1
 }
 $iconSizes = @(16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
 
@@ -127,41 +115,32 @@ function New-IconBitmap {
             $backgroundPath.Dispose()
         }
 
-        $pylonPen = [System.Drawing.Pen]::new([System.Drawing.Color]::White, $geometry.PylonWidth)
-        $deckPen = [System.Drawing.Pen]::new([System.Drawing.Color]::White, $geometry.DeckWidth)
+        $haloPen = [System.Drawing.Pen]::new(
+            [System.Drawing.Color]::White,
+            $geometry.HaloWidth)
         try {
-            foreach ($pen in @($pylonPen, $deckPen)) {
-                $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-                $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-                $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
-            }
+            $haloPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Flat
+            $haloPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Flat
 
-            $graphics.DrawLine(
-                $pylonPen,
-                $geometry.LeftPylonBottomX,
-                $geometry.LeftPylonBottomY,
-                $geometry.LeftPylonTopX,
-                $geometry.LeftPylonTopY)
-            $graphics.DrawLine(
-                $pylonPen,
-                $geometry.RightPylonTopX,
-                $geometry.RightPylonTopY,
-                $geometry.RightPylonBottomX,
-                $geometry.RightPylonBottomY)
-            $graphics.DrawBezier(
-                $deckPen,
-                $geometry.DeckStartX,
-                $geometry.DeckStartY,
-                $geometry.DeckControlOneX,
-                $geometry.DeckControlOneY,
-                $geometry.DeckControlTwoX,
-                $geometry.DeckControlTwoY,
-                $geometry.DeckEndX,
-                $geometry.DeckEndY)
+            $haloBounds = [System.Drawing.RectangleF]::new(
+                $geometry.HaloCenterX - $geometry.HaloRadius,
+                $geometry.HaloCenterY - $geometry.HaloRadius,
+                $geometry.HaloRadius * 2,
+                $geometry.HaloRadius * 2)
+            $angularStep = $geometry.HaloSegmentDegrees + $geometry.HaloGapDegrees
+            $segmentCount = [int](360 / $angularStep)
+            # Alternate one degree of white with one degree of transparency around the halo.
+            for ($segmentIndex = 0; $segmentIndex -lt $segmentCount; $segmentIndex++) {
+                $startAngle = -90.5 + ($segmentIndex * $angularStep)
+                $graphics.DrawArc(
+                    $haloPen,
+                    $haloBounds,
+                    $startAngle,
+                    $geometry.HaloSegmentDegrees)
+            }
         }
         finally {
-            $pylonPen.Dispose()
-            $deckPen.Dispose()
+            $haloPen.Dispose()
         }
     }
     finally {
@@ -465,12 +444,48 @@ function Compare-IconFrames {
     }
 }
 
+function New-ScaledIconBitmap {
+    param(
+        [System.Drawing.Bitmap]$SourceBitmap,
+        [int]$PixelSize
+    )
+
+    $bitmap = [System.Drawing.Bitmap]::new(
+        $PixelSize,
+        $PixelSize,
+        [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
+        $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $graphics.DrawImage(
+            $SourceBitmap,
+            [System.Drawing.Rectangle]::new(0, 0, $PixelSize, $PixelSize),
+            0,
+            0,
+            $SourceBitmap.Width,
+            $SourceBitmap.Height,
+            [System.Drawing.GraphicsUnit]::Pixel)
+    }
+    finally {
+        $graphics.Dispose()
+    }
+
+    return $bitmap
+}
+
 function Write-MultiResolutionIcon {
-    param([string]$Path)
+    param(
+        [string]$Path,
+        [System.Drawing.Bitmap]$MasterBitmap
+    )
 
     $frames = @()
     foreach ($size in $iconSizes) {
-        $frameBitmap = New-IconBitmap -PixelSize $size
+        # Downsample the common master so subpixel halo gaps average consistently at small sizes.
+        $frameBitmap = New-ScaledIconBitmap -SourceBitmap $MasterBitmap -PixelSize $size
         try {
             $frames += [pscustomobject]@{
                 Size = $size
@@ -525,6 +540,7 @@ try {
     $masterBitmap = New-IconBitmap -PixelSize 1024
     try {
         $masterBitmap.Save($generatedPngPath, [System.Drawing.Imaging.ImageFormat]::Png)
+        Write-MultiResolutionIcon -Path $generatedIconPath -MasterBitmap $masterBitmap
     }
     finally {
         $masterBitmap.Dispose()
@@ -533,7 +549,7 @@ try {
     $svg = @"
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
   <title id="title">IPA Bridge icon</title>
-  <desc id="description">An abstract white bridge gateway on a rounded blue and violet square.</desc>
+  <desc id="description">A finely segmented white halo on a rounded blue and violet square.</desc>
   <defs>
     <linearGradient id="background" x1="18" y1="16" x2="240" y2="242" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#1A8CFF" />
@@ -551,8 +567,7 @@ try {
   <rect x="$($geometry.BackgroundX)" y="$($geometry.BackgroundY)" width="$($geometry.BackgroundSize)" height="$($geometry.BackgroundSize)" rx="$($geometry.BackgroundRadius)" fill="url(#background)" />
   <rect x="$($geometry.BackgroundX)" y="$($geometry.BackgroundY)" width="$($geometry.BackgroundSize)" height="$($geometry.BackgroundSize)" rx="$($geometry.BackgroundRadius)" fill="url(#glow)" />
   <path d="M 120 248 L 248 128 L 248 248 Z" fill="#EAE5FF" fill-opacity="0.19" clip-path="url(#rounded-square)" />
-  <path d="M $($geometry.LeftPylonBottomX) $($geometry.LeftPylonBottomY) L $($geometry.LeftPylonTopX) $($geometry.LeftPylonTopY) M $($geometry.RightPylonTopX) $($geometry.RightPylonTopY) L $($geometry.RightPylonBottomX) $($geometry.RightPylonBottomY)" fill="none" stroke="#FFFFFF" stroke-width="$($geometry.PylonWidth)" stroke-linecap="round" stroke-linejoin="round" />
-  <path d="M $($geometry.DeckStartX) $($geometry.DeckStartY) C $($geometry.DeckControlOneX) $($geometry.DeckControlOneY), $($geometry.DeckControlTwoX) $($geometry.DeckControlTwoY), $($geometry.DeckEndX) $($geometry.DeckEndY)" fill="none" stroke="#FFFFFF" stroke-width="$($geometry.DeckWidth)" stroke-linecap="round" />
+  <circle cx="$($geometry.HaloCenterX)" cy="$($geometry.HaloCenterY)" r="$($geometry.HaloRadius)" pathLength="360" fill="none" stroke="#FFFFFF" stroke-width="$($geometry.HaloWidth)" stroke-linecap="butt" stroke-dasharray="$($geometry.HaloSegmentDegrees) $($geometry.HaloGapDegrees)" stroke-dashoffset="0.5" transform="rotate(-90 $($geometry.HaloCenterX) $($geometry.HaloCenterY))" />
 </svg>
 "@
     $normalizedSvg = $svg.Replace("`r`n", "`n").Replace("`r", "`n") + "`n"
@@ -560,8 +575,6 @@ try {
         $generatedSvgPath,
         $normalizedSvg,
         [System.Text.UTF8Encoding]::new($false))
-
-    Write-MultiResolutionIcon -Path $generatedIconPath
 
     $assetNames = @('IPA-Bridge.png', 'IPA-Bridge.svg', 'IPA-Bridge.ico')
     if ($Verify) {

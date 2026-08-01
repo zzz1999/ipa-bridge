@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
   <title id="title">IPA Bridge icon</title>
-  <desc id="description">An abstract white bridge gateway on a rounded blue and violet square.</desc>
+  <desc id="description">A finely segmented white halo on a rounded blue and violet square.</desc>
   <defs>
     <linearGradient id="background" x1="18" y1="16" x2="240" y2="242" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#1A8CFF" />
@@ -18,6 +18,5 @@
   <rect x="8" y="8" width="240" height="240" rx="57" fill="url(#background)" />
   <rect x="8" y="8" width="240" height="240" rx="57" fill="url(#glow)" />
   <path d="M 120 248 L 248 128 L 248 248 Z" fill="#EAE5FF" fill-opacity="0.19" clip-path="url(#rounded-square)" />
-  <path d="M 77 184 L 116 102 M 140 102 L 179 184" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
-  <path d="M 91 164 C 111 151, 145 151, 165 164" fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" />
+  <circle cx="128" cy="128" r="68" pathLength="360" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="butt" stroke-dasharray="1 1" stroke-dashoffset="0.5" transform="rotate(-90 128 128)" />
 </svg>
