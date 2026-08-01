@@ -1339,7 +1339,21 @@ else
             fakeConfiguration,
             fakeIpatool,
             (_, _, _) => { });
+        Check(
+            !cancelableStore.HasAccounts &&
+            !cancelableStore.CanSelectAccount &&
+            cancelableStore.IsEmptyAccountPromptVisible &&
+            cancelableStore.IsAccountSelectionSectionVisible &&
+            !cancelableStore.IsAccountFormVisible,
+            "an empty account list exposes one add-account path without an empty selector");
         cancelableStore.AddAccountCommand.Execute(null);
+        Check(
+            cancelableStore.IsAddingAccount &&
+            !cancelableStore.IsEmptyAccountPromptVisible &&
+            !cancelableStore.IsAccountSelectionSectionVisible &&
+            cancelableStore.IsAccountFormVisible &&
+            !cancelableStore.CanSelectAccount,
+            "starting the first account hides the empty selector and opens the credential form");
         cancelableStore.Email = "cancel@example.invalid";
         cancelableStore.ApplePassword = "temporary-apple-secret";
         cancelableStore.VaultPassphrase = "temporary-vault-secret";
@@ -1375,7 +1389,9 @@ else
         cancelableStore.CancelAccountEditCommand.Execute(null);
         Check(
             !cancelableStore.IsAddingAccount &&
-            !Directory.Exists(pendingAccountDirectory),
+            !Directory.Exists(pendingAccountDirectory) &&
+            cancelableStore.IsEmptyAccountPromptVisible &&
+            !cancelableStore.IsAccountFormVisible,
             "pending-session cleanup succeeds on retry after the file lock is released");
 
         var fakeApp = new StoreApp

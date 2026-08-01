@@ -68,6 +68,16 @@ public partial class StoreView : UserControl
         {
             VaultPassphraseBox.Clear();
         }
+
+        if (e.PropertyName == nameof(StoreViewModel.IsAddingAccount) && viewModel.IsAddingAccount)
+        {
+            // The Add action can collapse its own row; move keyboard focus to the first useful field.
+            Dispatcher.BeginInvoke(() =>
+            {
+                AppleAccountEmailBox.BringIntoView();
+                AppleAccountEmailBox.Focus();
+            });
+        }
     }
 
     private void ApplePasswordBox_OnPasswordChanged(object sender, RoutedEventArgs e)

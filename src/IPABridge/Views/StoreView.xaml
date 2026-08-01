@@ -219,55 +219,128 @@
                      Text="Choose an account before searching or acquiring an app. Each account has an isolated local ipatool session and uses the App Store region assigned by Apple."
                      TextWrapping="Wrap" />
 
-          <TextBlock Margin="2,0,0,6"
-                     Style="{StaticResource CaptionTextStyle}"
-                     Text="Account for search and purchase" />
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="8" />
-              <ColumnDefinition Width="44" />
-            </Grid.ColumnDefinitions>
-            <ComboBox x:Name="AppleAccountSelector"
-                      AutomationProperties.HelpText="Selects the isolated Apple Account used for App Store search, license acquisition, and download"
-                      AutomationProperties.Name="Apple Account for App Store operations"
-                      IsEnabled="{Binding Store.CanSelectAccount}"
-                      IsTextSearchEnabled="True"
-                      ItemsSource="{Binding Store.Accounts}"
-                      SelectedItem="{Binding Store.SelectedAccount, Mode=OneWay}"
-                      SelectionChanged="AppleAccountSelector_OnSelectionChanged"
-                      TextSearch.TextPath="Email">
-              <ComboBox.ItemTemplate>
-                <DataTemplate>
-                  <TextBlock Text="{Binding Email}"
-                             TextTrimming="CharacterEllipsis"
-                             ToolTip="{Binding Email}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <Button x:Name="AddAppleAccountButton"
-                    Grid.Column="2"
-                    Width="44"
+          <StackPanel x:Name="AppleAccountSelectionSection"
+                      Visibility="{Binding Store.IsAccountSelectionSectionVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock Margin="2,0,0,6"
+                       Style="{StaticResource CaptionTextStyle}"
+                       Text="Account for search and purchase" />
+            <Grid x:Name="AppleAccountSelectorRow"
+                  Visibility="{Binding Store.HasAccounts, Converter={StaticResource BooleanToVisibilityConverter}}">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="48" />
+              </Grid.ColumnDefinitions>
+              <ComboBox x:Name="AppleAccountSelector"
+                        AutomationProperties.HelpText="Selects the isolated Apple Account used for App Store search, license acquisition, and download"
+                        AutomationProperties.Name="Apple Account for App Store operations"
+                        FocusVisualStyle="{x:Null}"
+                        IsEnabled="{Binding Store.CanSelectAccount}"
+                        IsTextSearchEnabled="True"
+                        ItemsSource="{Binding Store.Accounts}"
+                        SelectedItem="{Binding Store.SelectedAccount, Mode=OneWay}"
+                        SelectionChanged="AppleAccountSelector_OnSelectionChanged"
+                        TextSearch.TextPath="Email">
+                <ComboBox.ItemContainerStyle>
+                  <Style BasedOn="{StaticResource {x:Type ComboBoxItem}}" TargetType="ComboBoxItem">
+                    <Setter Property="MinHeight" Value="44" />
+                  </Style>
+                </ComboBox.ItemContainerStyle>
+                <ComboBox.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding Email}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Email}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <Button x:Name="AddAppleAccountButton"
+                      Grid.Column="2"
+                      Width="48"
+                      Height="48"
+                      AutomationProperties.Name="Add Apple Account"
+                      Command="{Binding Store.AddAccountCommand}"
+                      Style="{StaticResource SecondaryButtonStyle}"
+                      ToolTip="Add Apple Account">
+                <Canvas Width="18" Height="18">
+                  <Rectangle Width="18"
+                             Height="3"
+                             Canvas.Top="7.5"
+                             Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                             RadiusX="1.5"
+                             RadiusY="1.5" />
+                  <Rectangle Width="3"
+                             Height="18"
+                             Canvas.Left="7.5"
+                             Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                             RadiusX="1.5"
+                             RadiusY="1.5" />
+                </Canvas>
+              </Button>
+            </Grid>
+
+            <Button x:Name="AddFirstAppleAccountButton"
+                    MinHeight="72"
+                    Padding="14,10"
+                    HorizontalContentAlignment="Stretch"
+                    AutomationProperties.HelpText="Creates the first isolated local Apple Account profile"
                     AutomationProperties.Name="Add Apple Account"
                     Command="{Binding Store.AddAccountCommand}"
-                    Style="{StaticResource SecondaryButtonStyle}"
-                    ToolTip="Add Apple Account">
-              <Canvas Width="16" Height="16">
-                <Rectangle Width="16"
-                           Height="3"
-                           Canvas.Top="6.5"
-                           Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                           RadiusX="1.5"
-                           RadiusY="1.5" />
-                <Rectangle Width="3"
-                           Height="16"
-                           Canvas.Left="6.5"
-                           Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                           RadiusX="1.5"
-                           RadiusY="1.5" />
-              </Canvas>
+                    Style="{StaticResource PrivacyCardButtonStyle}"
+                    Visibility="{Binding Store.IsEmptyAccountPromptVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="36" />
+                  <ColumnDefinition Width="12" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="10" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Width="36"
+                        Height="36"
+                        Background="{StaticResource AccentSoftBrush}"
+                        CornerRadius="12">
+                  <Canvas Width="18"
+                          Height="18"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center">
+                    <Rectangle Width="18"
+                               Height="3"
+                               Canvas.Top="7.5"
+                               Fill="{StaticResource AccentBrush}"
+                               RadiusX="1.5"
+                               RadiusY="1.5" />
+                    <Rectangle Width="3"
+                               Height="18"
+                               Canvas.Left="7.5"
+                               Fill="{StaticResource AccentBrush}"
+                               RadiusX="1.5"
+                               RadiusY="1.5" />
+                  </Canvas>
+                </Border>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                  <TextBlock FontSize="13"
+                             FontWeight="SemiBold"
+                             Text="Add Apple Account" />
+                  <TextBlock Margin="0,2,0,0"
+                             Style="{StaticResource CaptionTextStyle}"
+                             Text="Create your first local profile"
+                             TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <Path Grid.Column="4"
+                      Width="8"
+                      Height="14"
+                      VerticalAlignment="Center"
+                      Data="M 1,1 L 7,7 L 1,13"
+                      Stretch="None"
+                      Stroke="{StaticResource TextTertiaryBrush}"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round"
+                      StrokeStartLineCap="Round"
+                      StrokeThickness="2.2" />
+              </Grid>
             </Button>
-          </Grid>
+          </StackPanel>
 
           <Border Margin="0,12,0,0"
                   Padding="14"
@@ -320,58 +393,61 @@
             </StackPanel>
           </Border>
 
-          <TextBlock Margin="0,18,0,0"
-                     Style="{StaticResource SectionTitleStyle}"
-                     Text="{Binding Store.AccountFormTitle}" />
-          <TextBlock Margin="2,12,0,6" Style="{StaticResource CaptionTextStyle}" Text="Apple Account email" />
-          <TextBox x:Name="AppleAccountEmailBox"
-                   IsReadOnly="{Binding Store.IsAccountEmailReadOnly}"
-                   Text="{Binding Store.Email, UpdateSourceTrigger=PropertyChanged}" />
+          <StackPanel x:Name="AccountFormPanel"
+                      Visibility="{Binding Store.IsAccountFormVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock Margin="0,18,0,0"
+                       Style="{StaticResource SectionTitleStyle}"
+                       Text="{Binding Store.AccountFormTitle}" />
+            <TextBlock Margin="2,12,0,6" Style="{StaticResource CaptionTextStyle}" Text="Apple Account email" />
+            <TextBox x:Name="AppleAccountEmailBox"
+                     IsReadOnly="{Binding Store.IsAccountEmailReadOnly}"
+                     Text="{Binding Store.Email, UpdateSourceTrigger=PropertyChanged}" />
 
-          <TextBlock Margin="2,13,0,6" Style="{StaticResource CaptionTextStyle}" Text="Apple Account password" />
-          <PasswordBox x:Name="ApplePasswordBox"
-                       PasswordChanged="ApplePasswordBox_OnPasswordChanged" />
+            <TextBlock Margin="2,13,0,6" Style="{StaticResource CaptionTextStyle}" Text="Apple Account password" />
+            <PasswordBox x:Name="ApplePasswordBox"
+                         PasswordChanged="ApplePasswordBox_OnPasswordChanged" />
 
-          <StackPanel Visibility="{Binding Store.RequiresTwoFactor, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <TextBlock Margin="2,13,0,6"
+            <StackPanel Visibility="{Binding Store.RequiresTwoFactor, Converter={StaticResource BooleanToVisibilityConverter}}">
+              <TextBlock Margin="2,13,0,6"
+                         Style="{StaticResource CaptionTextStyle}"
+                         Foreground="{StaticResource OrangeBrush}"
+                         Text="Two-factor authentication code" />
+              <PasswordBox x:Name="TwoFactorCodeBox"
+                           PasswordChar="●"
+                           PasswordChanged="TwoFactorCodeBox_OnPasswordChanged" />
+            </StackPanel>
+
+            <TextBlock Margin="2,13,0,6" Style="{StaticResource CaptionTextStyle}" Text="Local vault passphrase" />
+            <PasswordBox x:Name="VaultPassphraseBox"
+                         PasswordChanged="VaultPassphraseBox_OnPasswordChanged" />
+            <TextBlock Margin="2,6,0,0"
                        Style="{StaticResource CaptionTextStyle}"
-                       Foreground="{StaticResource OrangeBrush}"
-                       Text="Two-factor authentication code" />
-            <PasswordBox x:Name="TwoFactorCodeBox"
-                         PasswordChar="●"
-                         PasswordChanged="TwoFactorCodeBox_OnPasswordChanged" />
+                       Text="This differs from your Apple password and protects the sign-in saved locally by ipatool."
+                       TextWrapping="Wrap" />
+
+            <Grid Margin="0,18,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Button Padding="16,11"
+                      Style="{StaticResource SecondaryButtonStyle}"
+                      Command="{Binding Store.CheckAccountCommand}"
+                      Content="Check Session" />
+              <Button Grid.Column="2"
+                      Padding="16,11"
+                      Style="{StaticResource PrimaryButtonStyle}"
+                      Command="{Binding Store.LoginCommand}"
+                      Content="{Binding Store.AccountActionLabel}" />
+            </Grid>
+
+            <Button Margin="0,9,0,0"
+                    Command="{Binding Store.CancelAccountEditCommand}"
+                    Content="Cancel Adding Account"
+                    Style="{StaticResource GhostButtonStyle}"
+                    Visibility="{Binding Store.IsAddingAccount, Converter={StaticResource BooleanToVisibilityConverter}}" />
           </StackPanel>
-
-          <TextBlock Margin="2,13,0,6" Style="{StaticResource CaptionTextStyle}" Text="Local vault passphrase" />
-          <PasswordBox x:Name="VaultPassphraseBox"
-                       PasswordChanged="VaultPassphraseBox_OnPasswordChanged" />
-          <TextBlock Margin="2,6,0,0"
-                     Style="{StaticResource CaptionTextStyle}"
-                     Text="This differs from your Apple password and protects the sign-in saved locally by ipatool."
-                     TextWrapping="Wrap" />
-
-          <Grid Margin="0,18,0,0">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="8" />
-              <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Button Padding="16,11"
-                    Style="{StaticResource SecondaryButtonStyle}"
-                    Command="{Binding Store.CheckAccountCommand}"
-                    Content="Check Session" />
-            <Button Grid.Column="2"
-                    Padding="16,11"
-                    Style="{StaticResource PrimaryButtonStyle}"
-                    Command="{Binding Store.LoginCommand}"
-                    Content="{Binding Store.AccountActionLabel}" />
-          </Grid>
-
-          <Button Margin="0,9,0,0"
-                  Command="{Binding Store.CancelAccountEditCommand}"
-                  Content="Cancel Adding Account"
-                  Style="{StaticResource GhostButtonStyle}"
-                  Visibility="{Binding Store.IsAddingAccount, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
           <Border Margin="0,18,0,0"
                   Padding="14"

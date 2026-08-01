@@ -80,6 +80,7 @@ public partial class App : Application
                 }
             }
 
+            VerifyFirstAccountFlow(storeView, viewModel.Store);
             VerifyVerboseLoggingTipDismissal(storeView, viewModel.Store);
             mainWindow = new MainWindow();
             privacyDialog = new PrivacyDialog();
@@ -145,13 +146,31 @@ public partial class App : Application
             VerifyEditorViewport(store.AppleAccountEmailBox, "Apple Account email input");
             VerifyEditorViewport(store.ApplePasswordBox, "Apple Account password input");
             VerifyEditorViewport(store.VaultPassphraseBox, "local vault passphrase input");
-            if (store.AppleAccountSelector.ActualWidth <= 0 ||
-                store.AppleAccountSelector.ActualHeight <= 0 ||
-                store.AddAppleAccountButton.ActualWidth < 40 ||
-                store.AddAppleAccountButton.ActualHeight < 40)
+            if (store.DataContext is not MainViewModel mainViewModel)
+            {
+                throw new InvalidOperationException("The App Store page has no main view model.");
+            }
+
+            if (mainViewModel.Store.HasAccounts)
+            {
+                if (store.AppleAccountSelector.ActualWidth <= 0 ||
+                    store.AppleAccountSelector.ActualHeight < 44 ||
+                    store.AddAppleAccountButton.ActualWidth < 44 ||
+                    store.AddAppleAccountButton.ActualHeight < 44 ||
+                    store.AddFirstAppleAccountButton.Visibility != Visibility.Collapsed)
+                {
+                    throw new InvalidOperationException(
+                        "The saved Apple Account selector row is not available in the account card.");
+                }
+            }
+            else if (!mainViewModel.Store.IsAddingAccount &&
+                     (store.AppleAccountSelectorRow.Visibility != Visibility.Collapsed ||
+                      store.AddFirstAppleAccountButton.Visibility != Visibility.Visible ||
+                      store.AddFirstAppleAccountButton.ActualHeight < 64 ||
+                      store.AccountFormPanel.Visibility != Visibility.Collapsed))
             {
                 throw new InvalidOperationException(
-                    "The Apple Account selector or add button is not available in the account card.");
+                    "The first-account action does not replace the empty Apple Account selector.");
             }
         }
     }
@@ -169,6 +188,47 @@ public partial class App : Application
             throw new InvalidOperationException(
                 $"The {description} editor viewport is too short: " +
                 $"viewport={contentHost.ViewportHeight:F1}, font={input.FontSize:F1}.");
+        }
+    }
+
+    private static void VerifyFirstAccountFlow(StoreView storeView, StoreViewModel viewModel)
+    {
+        if (viewModel.HasAccounts)
+        {
+            return;
+        }
+
+        var addCommand = storeView.AddFirstAppleAccountButton.Command;
+        if (addCommand is null || !addCommand.CanExecute(null))
+        {
+            throw new InvalidOperationException("The empty account state has no executable Add action.");
+        }
+
+        addCommand.Execute(null);
+        storeView.UpdateLayout();
+        if (!viewModel.IsAddingAccount ||
+            storeView.AppleAccountSelectionSection.Visibility != Visibility.Collapsed ||
+            storeView.AccountFormPanel.Visibility != Visibility.Visible ||
+            storeView.AppleAccountEmailBox.IsReadOnly)
+        {
+            throw new InvalidOperationException(
+                "The first-account action did not replace the empty state with an editable credential form.");
+        }
+
+        var cancelCommand = viewModel.CancelAccountEditCommand;
+        if (!cancelCommand.CanExecute(null))
+        {
+            throw new InvalidOperationException("The first-account form has no executable Cancel action.");
+        }
+
+        cancelCommand.Execute(null);
+        storeView.UpdateLayout();
+        if (viewModel.IsAddingAccount ||
+            storeView.AddFirstAppleAccountButton.Visibility != Visibility.Visible ||
+            storeView.AccountFormPanel.Visibility != Visibility.Collapsed)
+        {
+            throw new InvalidOperationException(
+                "Canceling the first-account form did not restore the empty account action.");
         }
     }
 

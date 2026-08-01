@@ -59,6 +59,9 @@ public sealed class StoreViewModel : ObservableObject
             RemoveSelectedAccountAsync,
             () => SelectedAccount is not null && !IsBusy && IsRemoveConfirmationVisible);
         DismissVerboseLoggingTipCommand = new RelayCommand(() => IsVerboseLoggingTipVisible = false);
+
+        // Keep every account-list mutation, including rollback paths, reflected in the selector state.
+        Accounts.CollectionChanged += (_, _) => NotifyAccountCollectionStateChanged();
     }
 
     public event EventHandler<string>? IpaDownloaded;
@@ -116,6 +119,8 @@ public sealed class StoreViewModel : ObservableObject
             OnPropertyChanged(nameof(StorefrontSummary));
             OnPropertyChanged(nameof(AccountFormTitle));
             OnPropertyChanged(nameof(AccountActionLabel));
+            OnPropertyChanged(nameof(CanSelectAccount));
+            OnPropertyChanged(nameof(IsAccountFormVisible));
             NotifyCommands();
         }
     }
@@ -142,19 +147,32 @@ public sealed class StoreViewModel : ObservableObject
         ? "No Apple Account selected"
         : $"Selected account: {SelectedAccount.Email}";
 
-    public string StorefrontSummary => SelectedAccount is null
-        ? "Select an account to choose an App Store region."
-        : $"Searches and purchases use the App Store region assigned to {SelectedAccount.Email}.";
+    public string StorefrontSummary => SelectedAccount is not null
+        ? $"Searches and purchases use the App Store region assigned to {SelectedAccount.Email}."
+        : IsAddingAccount
+            ? "The App Store region will be detected after secure sign-in."
+            : HasAccounts
+                ? "Select an account to choose an App Store region."
+                : "Add an Apple Account to choose an App Store region.";
 
     public string AccountFormTitle => IsAddingAccount
         ? "Add Apple Account"
         : SelectedAccount is null
-            ? "Select or add an account"
+            ? "Add Apple Account"
             : "Reconnect Selected Account";
 
     public string AccountActionLabel => IsAddingAccount ? "Add & Sign In" : "Sign In Securely";
 
-    public bool CanSelectAccount => !IsBusy && !IsAddingAccount;
+    public bool HasAccounts => Accounts.Count > 0;
+
+    public bool CanSelectAccount =>
+        HasAccounts && SelectedAccount is not null && !IsBusy && !IsAddingAccount;
+
+    public bool IsEmptyAccountPromptVisible => !HasAccounts && !IsAddingAccount;
+
+    public bool IsAccountSelectionSectionVisible => HasAccounts || !IsAddingAccount;
+
+    public bool IsAccountFormVisible => IsAddingAccount || SelectedAccount is not null;
 
     public string Email
     {
@@ -277,6 +295,10 @@ public sealed class StoreViewModel : ObservableObject
             OnPropertyChanged(nameof(AccountActionLabel));
             OnPropertyChanged(nameof(IsAccountEmailReadOnly));
             OnPropertyChanged(nameof(CanSelectAccount));
+            OnPropertyChanged(nameof(StorefrontSummary));
+            OnPropertyChanged(nameof(IsEmptyAccountPromptVisible));
+            OnPropertyChanged(nameof(IsAccountSelectionSectionVisible));
+            OnPropertyChanged(nameof(IsAccountFormVisible));
             NotifyCommands();
         }
     }
@@ -998,6 +1020,18 @@ public sealed class StoreViewModel : ObservableObject
         RequestRemoveAccountCommand.NotifyCanExecuteChanged();
         CancelRemoveAccountCommand.NotifyCanExecuteChanged();
         ConfirmRemoveAccountCommand.NotifyCanExecuteChanged();
+    }
+
+    private void NotifyAccountCollectionStateChanged()
+    {
+        OnPropertyChanged(nameof(HasAccounts));
+        OnPropertyChanged(nameof(CanSelectAccount));
+        OnPropertyChanged(nameof(StorefrontSummary));
+        OnPropertyChanged(nameof(AccountFormTitle));
+        OnPropertyChanged(nameof(IsEmptyAccountPromptVisible));
+        OnPropertyChanged(nameof(IsAccountSelectionSectionVisible));
+        OnPropertyChanged(nameof(IsAccountFormVisible));
+        NotifyCommands();
     }
 
     private static string BuildVersionStatusMessage(
