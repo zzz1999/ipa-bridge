@@ -72,9 +72,9 @@ On the first launch, IPA Bridge creates a random 256-bit local settings key and 
 
 After the first launch, open the Settings page:
 
-1. Select **Install / Update** in the official ipatool card. IPA Bridge downloads the architecture-specific official ipatool v2.3.0 archive and enables it only after verification against the matching SHA-256 value pinned in this source tree.
-2. Select **Install pinned version** in the iOS device components card, or choose an existing complete `libimobiledevice` tool directory. A compatible directory must contain `idevice_id.exe`, `ideviceinfo.exe`, `idevicepair.exe`, and `ideviceinstaller.exe` together.
-3. If Apple Devices is absent or the `idevice_id` transport probe cannot reach Apple device services, select **One-click install / update** in the Apple device driver and service card to request Apple Devices from Microsoft Store.
+1. Select **Install / Update** in the official ipatool card. IPA Bridge downloads the architecture-specific official ipatool v2.3.1 archive and enables it only after verification against the matching SHA-256 value pinned in this source tree.
+2. Select **Install Verified GitHub Release** in the iOS device tools card, or choose an existing complete `libimobiledevice` tool directory. A compatible directory must contain `idevice_id.exe`, `ideviceinfo.exe`, `idevicepair.exe`, and `ideviceinstaller.exe` together.
+3. If Apple Devices is absent and the local Apple transport is unavailable, select **Install / Update via Microsoft Store** in the Apple device driver and service card. GitHub repair is offered only for the separate open-source device tools when Apple transport is already reachable.
 4. If you use Apple Devices, open it once after installation. Then connect and unlock the device, return to IPA Bridge, and select **Check again**.
 5. Select and save an IPA download directory. The default is `%USERPROFILE%\Downloads\IPA Bridge`.
 6. Open the App Store page and add one or more Apple Accounts. Each profile is connected and stored independently.
@@ -100,15 +100,15 @@ If WinGet is unavailable, Microsoft Store requires interactive authentication, a
 
 ### Search for and download an app
 
-1. Select **Add Apple Account**, then enter the account email, Apple password, and local credential-vault passphrase.
-2. Select **Add & Sign In**. If the account uses two-factor authentication, enter the verification code when prompted and retry.
+1. Select **Add Apple Account**, then enter the account email and Apple password.
+2. Select **Add & Sign In**. IPA Bridge creates a random 256-bit key for that profile automatically. If Apple requests two-factor authentication, a separate panel appears; enter the six-digit code and select **Verify & Continue**.
 3. Repeat the first two steps for any additional accounts.
-4. In **Account for search and purchase**, select the account whose App Store you want to use. Enter that profile's vault passphrase and select **Check Session** if its connected state has not yet been verified.
+4. In **Account for search and purchase**, select the account whose App Store you want to use, then select **Check Session** if its connected state has not yet been verified. The generated local key is supplied automatically.
 5. Enter an app name, search, and select the target app. Search results come from the App Store region Apple assigned to the selected account when it signed in.
 6. Download the latest version directly, or select **Load version history** first when an older version is needed. The license request and download use the same selected account.
 7. A completed download appears automatically in the IPA library.
 
-The local credential-vault passphrase is the passphrase ipatool uses to encrypt that profile's account record on this computer. It is not the Apple account password. IPA Bridge does not save Apple passwords, two-factor codes, or vault passphrases.
+IPA Bridge never asks a new user to invent or remember an ipatool vault passphrase. The application generates a different 256-bit local vault key for each profile, stores it only inside the AES-256-GCM encrypted settings envelope, and supplies it to ipatool through ConPTY when required. Apple Account passwords and two-factor codes remain memory-only and are cleared after success, cancellation, or leaving the App Store page.
 
 Every profile receives a separate ipatool home below `%LOCALAPPDATA%\IPA Bridge\Accounts`, so its account record, cookie jar, and Apple-provided storefront cannot be mixed with another profile. IPA Bridge does not infer a country from the email address, IP address, or Windows region. Search returns no more than 25 results. During download, ipatool requests a license for the selected account, but paid apps, delisted apps, regional restrictions, missing account entitlement, or unavailable historical packages can still cause the operation to fail.
 
@@ -147,16 +147,18 @@ These are layered signals. The presence of an INF does not prove that the driver
 
 ## Privacy and supply-chain security
 
-- `%LOCALAPPDATA%\IPA Bridge\settings.secure.json` is a versioned AES-256-GCM envelope containing IPA Bridge's complete encrypted configuration: configured paths, Apple Account profile emails and IDs, the selected profile, and preferences.
+- `%LOCALAPPDATA%\IPA Bridge\settings.secure.json` is a versioned AES-256-GCM envelope containing IPA Bridge's complete encrypted configuration: configured paths, Apple Account profile emails and IDs, generated per-profile local vault keys, the selected profile, and preferences.
 - IPA Bridge creates a random 256-bit master key on first launch. Only the Windows Data Protection API `CurrentUser`-protected form is stored in `%LOCALAPPDATA%\IPA Bridge\master-key.v1`; the raw key is not written to disk.
 - Every settings save uses a new 96-bit nonce and a 128-bit authentication tag. A copied, modified, truncated, or mismatched settings envelope is rejected instead of being silently replaced with defaults.
 - An existing plaintext `%LOCALAPPDATA%\IPA Bridge\settings.json` from an earlier IPA Bridge build is migrated to the encrypted file. The encrypted result is reopened and verified before the legacy plaintext file is removed.
 - Settings with an unsupported envelope version or unrecognized configuration fields are rejected and preserved instead of being rewritten by an older schema.
 - If encrypted and legacy settings both exist with different values, IPA Bridge preserves both, reports a conflict, and blocks settings saves instead of guessing which file should win.
-- The Apple password, two-factor verification code, and local credential-vault passphrase exist briefly in IPA Bridge and ipatool process memory, but they are not written to IPA Bridge settings, a process command line, or IPA Bridge's persistent logs.
+- Apple passwords and two-factor verification codes exist briefly in IPA Bridge and ipatool process memory, but they are not written to IPA Bridge settings, a process command line, or IPA Bridge's persistent logs.
+- A new profile receives a random 256-bit local vault key. That generated key is persisted only inside the encrypted settings envelope, never shown to the user, and supplied to ipatool only through the local pseudo-console.
 - Sensitive values are written to ipatool's terminal prompts through Windows ConPTY rather than passed as command-line arguments.
 - Each Apple Account profile runs ipatool with a separate Windows home directory under `%LOCALAPPDATA%\IPA Bridge\Accounts\<profile-id>`. The isolated `.ipatool` directory contains ipatool's encrypted account record and its separate cookie jar.
-- ipatool encrypts its account record with the profile's vault passphrase. Its cookie jar is not encrypted by IPA Bridge or by that passphrase; it relies on the Windows user profile and inherited filesystem access controls.
+- ipatool encrypts its account record with the generated per-profile vault key. Its cookie jar is not encrypted by IPA Bridge or by that key; it relies on the Windows user profile and inherited filesystem access controls.
+- Removing a profile first moves its isolated session into a managed local quarantine. IPA Bridge commits the encrypted configuration before deleting that quarantine; after an interruption, startup recovery restores the session when the profile still exists or finishes deletion only when the profile is absent.
 - ConPTY output is redacted against known sensitive values again before it leaves the execution layer.
 - IPA Bridge does not enable `ipatool --verbose`, avoiding upstream detailed logs that may record authentication fields.
 - Automatically downloaded ipatool and device tools must pass SHA-256 verification before they are enabled.
@@ -190,19 +192,21 @@ IPA Bridge preserves and displays useful errors from the underlying tools whenev
 | Temporary files | `%LOCALAPPDATA%\IPA Bridge\Temporary` |
 | IPA downloads | `%USERPROFILE%\Downloads\IPA Bridge` |
 
-The tool and download directories can be replaced from Settings with paths the user has reviewed. Sensitive passphrases are not written to the encrypted settings file. A legacy plaintext `settings.json` may appear only until a previous installation has completed its verified one-time migration.
+The tool and download directories can be replaced from Settings with paths the user has reviewed. Generated per-profile vault keys are written only inside the encrypted settings file; Apple passwords and verification codes are never persisted. A legacy plaintext `settings.json` may appear only until a previous installation has completed its verified one-time migration.
 
 When upgrading from the earlier single-account configuration, the saved email becomes the first selected profile. IPA Bridge does not copy the old default-home `%USERPROFILE%\.ipatool` session into the new isolated profile, because copying an unverified account and storefront could associate the wrong session with the profile. Reconnect that profile once in the App Store page. The former `%USERPROFILE%\.ipatool` directory remains under the user's control and can be archived or removed after the new profile works.
+
+Profiles created by the earlier manual-vault build migrate without deleting their isolated sessions. Because IPA Bridge never stored the old user-entered passphrase, those profiles show an explicit **Reset Session & Sign In** action. That action removes only the selected profile's old local ipatool sign-in, creates a generated vault key, and requires Apple sign-in again; downloaded IPA files are not removed.
 
 ## Troubleshooting
 
 | Symptom | Suggested action |
 | --- | --- |
-| Apple Devices is not detected and no compatible device service is available | Select **One-click install / update** in Settings, or open the [official Microsoft Store page](https://apps.microsoft.com/detail/9NP83LWLPZ9K) manually |
+| Apple Devices is not detected and no compatible device service is available | Select **Install / Update via Microsoft Store** in Settings, or open the [official Microsoft Store page](https://apps.microsoft.com/detail/9NP83LWLPZ9K) manually |
 | The driver is installed but the device service is not running | Open Apple Devices once and reconnect the device; restart Windows and check again if necessary |
 | Driver status is unavailable to read | The Driver Store could not be inspected; this does not prove the driver is missing, and IPA Bridge continues device discovery when the transport is working |
 | The iPhone or iPad cannot be found | Try a data-capable cable or another USB port, keep the device unlocked, accept Trust This Computer, and refresh |
-| The existing login cannot be checked | Confirm that the value entered is the local credential-vault passphrase; it may differ from the Apple account password |
+| The existing login cannot be checked | Reconnect the selected profile. IPA Bridge supplies its generated local key automatically; an older keyless profile uses the explicit **Reset Session & Sign In** upgrade action |
 | An upgraded account profile is not connected | Reconnect it once. The saved email is migrated, but the earlier global `%USERPROFILE%\.ipatool` session is intentionally not imported into the profile's isolated directory |
 | Search shows a different regional catalog than expected | Confirm the selected account and reconnect it if necessary. The region comes from the storefront Apple assigned to that account; IPA Bridge does not override it |
 | A selected profile reports another account in its session | Reconnect the selected profile. IPA Bridge blocks search, purchase, version lookup, and download until the isolated session email matches the profile |
@@ -242,7 +246,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for more detail about component
 
 The build job in `.github/workflows/release.yml` runs on every push to `main` and when dispatched manually. It uses fixed operating-system runner labels, the exact SDK selected by `global.json`, and GitHub Actions pinned to verified full commit SHAs.
 
-1. Download and checksum the pinned ipatool v2.3.0 contract binary, restore dependencies, verify formatting, build with warnings treated as errors, and run the smoke tests on a Windows runner.
+1. Download and checksum the pinned ipatool v2.3.1 contract binary, restore dependencies, verify formatting, build with warnings treated as errors, and run the smoke tests on a Windows runner.
 2. Publish a self-contained, single-file Windows x64 executable.
 3. Copy the exact 8.0.29 Runtime pack license and third-party notices plus the WPF pack license from the restored packages, then add the .NET Library License and Windows SDK licensing notice required by the Windows-native components.
 4. Generate and independently verify `IPA-Bridge.exe.sha256`.

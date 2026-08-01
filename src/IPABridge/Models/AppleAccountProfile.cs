@@ -7,6 +7,7 @@ public sealed class AppleAccountProfile : ObservableObject
 {
     private string _id = Guid.NewGuid().ToString("N");
     private string _email = string.Empty;
+    private string _localVaultKey = string.Empty;
 
     public string Id
     {
@@ -25,6 +26,12 @@ public sealed class AppleAccountProfile : ObservableObject
                 OnPropertyChanged(nameof(Monogram));
             }
         }
+    }
+
+    public string LocalVaultKey
+    {
+        get => _localVaultKey;
+        set => SetProperty(ref _localVaultKey, value);
     }
 
     [JsonIgnore]

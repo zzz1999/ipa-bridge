@@ -11,13 +11,13 @@ namespace IPABridge.Services;
 
 public sealed class ToolBootstrapService : IDisposable
 {
-    private const string IpatoolVersion = "v2.3.0";
+    private const string IpatoolVersion = "v2.3.1";
     private const string IpatoolAmd64Sha256 =
-        "eaf208f0fee964a82f14f8eda60c4b0568fe555ad97729bb74277d3d7c0e4d54";
+        "8e986ed9320f205bcd1fd24640ec46a5b92ff346425aff28d1103e57d2fdcadb";
     private const string IpatoolArm64Sha256 =
-        "690d94332802f5fca604cce29ac9762089c7271c30a68e64eeb462c605e1fa07";
+        "661ffbee49d25f46c463a2b38cd05b08048a4c939a194825b9e3316ad0867da9";
     private const string IpatoolReleaseBaseUrl =
-        "https://github.com/majd/ipatool/releases/download/v2.3.0";
+        "https://github.com/majd/ipatool/releases/download/v2.3.1";
     private const string IdeviceToolsVersion = "v0.1.65";
     private const string IdeviceToolsSha256 = "fbae49be4ca8fbbab716121a5a6d29445ec8b9fd4b5f01c0300bd912fae88356";
     private const string IdeviceToolsDownloadUrl =

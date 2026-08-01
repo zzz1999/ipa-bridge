@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Security.Cryptography;
 using IPABridge.Infrastructure;
 using IPABridge.Models;
 using IPABridge.Services;
@@ -17,7 +18,8 @@ public sealed class StoreViewModel : ObservableObject
     private string _email = string.Empty;
     private string _applePassword = string.Empty;
     private string _twoFactorCode = string.Empty;
-    private string _vaultPassphrase = string.Empty;
+    private string? _transientLocalVaultAccountId;
+    private string _transientLocalVaultKey = string.Empty;
     private string _searchQuery = string.Empty;
     private StoreApp? _selectedApp;
     private StoreAppVersion? _selectedVersion;
@@ -58,6 +60,9 @@ public sealed class StoreViewModel : ObservableObject
         ConfirmRemoveAccountCommand = new AsyncRelayCommand(
             RemoveSelectedAccountAsync,
             () => SelectedAccount is not null && !IsBusy && IsRemoveConfirmationVisible);
+        CancelTwoFactorCommand = new RelayCommand(
+            CancelTwoFactor,
+            () => RequiresTwoFactor && !IsBusy);
         DismissVerboseLoggingTipCommand = new RelayCommand(() => IsVerboseLoggingTipVisible = false);
 
         // Keep every account-list mutation, including rollback paths, reflected in the selector state.
@@ -92,6 +97,8 @@ public sealed class StoreViewModel : ObservableObject
 
     public AsyncRelayCommand ConfirmRemoveAccountCommand { get; }
 
+    public RelayCommand CancelTwoFactorCommand { get; }
+
     public RelayCommand DismissVerboseLoggingTipCommand { get; }
 
     public AppleAccountProfile? SelectedAccount
@@ -119,6 +126,7 @@ public sealed class StoreViewModel : ObservableObject
             OnPropertyChanged(nameof(StorefrontSummary));
             OnPropertyChanged(nameof(AccountFormTitle));
             OnPropertyChanged(nameof(AccountActionLabel));
+            OnPropertyChanged(nameof(RequiresLegacySessionReset));
             OnPropertyChanged(nameof(CanSelectAccount));
             OnPropertyChanged(nameof(IsAccountFormVisible));
             NotifyCommands();
@@ -129,6 +137,14 @@ public sealed class StoreViewModel : ObservableObject
         object? sender,
         PropertyChangedEventArgs eventArgs)
     {
+        if (eventArgs.PropertyName == nameof(AppleAccountProfile.LocalVaultKey))
+        {
+            OnPropertyChanged(nameof(AccountActionLabel));
+            OnPropertyChanged(nameof(RequiresLegacySessionReset));
+            NotifyCommands();
+            return;
+        }
+
         if (eventArgs.PropertyName != nameof(AppleAccountProfile.Email))
         {
             return;
@@ -161,7 +177,14 @@ public sealed class StoreViewModel : ObservableObject
             ? "Add Apple Account"
             : "Reconnect Selected Account";
 
-    public string AccountActionLabel => IsAddingAccount ? "Add & Sign In" : "Sign In Securely";
+    public string AccountActionLabel => IsAddingAccount
+        ? "Add & Sign In"
+        : RequiresLegacySessionReset
+            ? "Reset Session & Sign In"
+            : "Sign In Securely";
+
+    public bool RequiresLegacySessionReset =>
+        !IsAddingAccount && SelectedAccount is not null && !HasLocalVaultKey(SelectedAccount);
 
     public bool HasAccounts => Accounts.Count > 0;
 
@@ -201,15 +224,13 @@ public sealed class StoreViewModel : ObservableObject
     public string TwoFactorCode
     {
         get => _twoFactorCode;
-        set => SetProperty(ref _twoFactorCode, value);
-    }
-
-    public string VaultPassphrase
-    {
-        get => _vaultPassphrase;
         set
         {
-            if (SetProperty(ref _vaultPassphrase, value))
+            var normalized = new string((value ?? string.Empty)
+                .Where(character => character is >= '0' and <= '9')
+                .Take(6)
+                .ToArray());
+            if (SetProperty(ref _twoFactorCode, normalized))
             {
                 NotifyCommands();
             }
@@ -293,6 +314,7 @@ public sealed class StoreViewModel : ObservableObject
 
             OnPropertyChanged(nameof(AccountFormTitle));
             OnPropertyChanged(nameof(AccountActionLabel));
+            OnPropertyChanged(nameof(RequiresLegacySessionReset));
             OnPropertyChanged(nameof(IsAccountEmailReadOnly));
             OnPropertyChanged(nameof(CanSelectAccount));
             OnPropertyChanged(nameof(StorefrontSummary));
@@ -326,7 +348,14 @@ public sealed class StoreViewModel : ObservableObject
     public bool RequiresTwoFactor
     {
         get => _requiresTwoFactor;
-        private set => SetProperty(ref _requiresTwoFactor, value);
+        private set
+        {
+            if (SetProperty(ref _requiresTwoFactor, value))
+            {
+                CancelTwoFactorCommand.NotifyCanExecuteChanged();
+                NotifyCommands();
+            }
+        }
     }
 
     public bool IsVerboseLoggingTipVisible
@@ -349,6 +378,12 @@ public sealed class StoreViewModel : ObservableObject
 
     public void LoadConfiguration()
     {
+        foreach (var recoveryFailure in _ipatoolService.RecoverStagedLocalAccountSessionRemovals(
+                     _configurationService.Current.AppleAccounts.Select(account => account.Id)))
+        {
+            _addActivity("Local account recovery failed", recoveryFailure, false);
+        }
+
         Accounts.Clear();
         foreach (var account in _configurationService.Current.AppleAccounts)
         {
@@ -364,7 +399,7 @@ public sealed class StoreViewModel : ObservableObject
         StatusMessage = _ipatoolService.IsAvailable
             ? selectedAccount is null
                 ? "Add an Apple Account to search its App Store region."
-                : "Enter this account's local vault passphrase and check its isolated sign-in."
+                : BuildAccountReadyMessage(selectedAccount)
             : "Install the official ipatool from Settings first.";
     }
 
@@ -373,7 +408,9 @@ public sealed class StoreViewModel : ObservableObject
         if (!_ipatoolService.IsAvailable)
         {
             ClearAccountOperationState(clearSecrets: true);
-            StatusMessage = "Install the official ipatool from Settings first.";
+            StatusMessage = TryRemoveTransientLocalAccountSession()
+                ? "Install the official ipatool from Settings first."
+                : "ipatool is unavailable, and a temporary local session could not be removed. Retry before changing accounts.";
         }
         else if (IsAddingAccount)
         {
@@ -382,6 +419,10 @@ public sealed class StoreViewModel : ObservableObject
         else if (SelectedAccount is null)
         {
             StatusMessage = "Add an Apple Account to search its App Store region.";
+        }
+        else
+        {
+            StatusMessage = BuildAccountReadyMessage(SelectedAccount);
         }
 
         NotifyCommands();
@@ -402,7 +443,7 @@ public sealed class StoreViewModel : ObservableObject
         var previousAccount = SelectedAccount;
         await RunBusyAsync("Switching Apple Account…", async cancellationToken =>
         {
-            if (!RemovePendingAccountSession())
+            if (!RemoveUncommittedAccountSessions())
             {
                 OnPropertyChanged(nameof(SelectedAccount));
                 throw new IOException(
@@ -426,7 +467,7 @@ public sealed class StoreViewModel : ObservableObject
                 throw;
             }
 
-            StatusMessage = $"Selected {account.Email}. Enter its vault passphrase to check this account's App Store session.";
+            StatusMessage = BuildAccountReadyMessage(account);
         });
     }
 
@@ -434,8 +475,8 @@ public sealed class StoreViewModel : ObservableObject
     {
         ApplePassword = string.Empty;
         TwoFactorCode = string.Empty;
-        VaultPassphrase = string.Empty;
         RequiresTwoFactor = false;
+        ClearTransientLocalVaultKey();
     }
 
     public void LeaveStore()
@@ -452,7 +493,7 @@ public sealed class StoreViewModel : ObservableObject
 
     private void BeginAddAccount()
     {
-        if (!RemovePendingAccountSession())
+        if (!RemoveUncommittedAccountSessions())
         {
             StatusMessage = "The previous temporary account session could not be removed. Try adding the account again to retry cleanup.";
             return;
@@ -464,13 +505,13 @@ public sealed class StoreViewModel : ObservableObject
         ClearAccountOperationState(clearSecrets: true);
         Email = string.Empty;
         StatusMessage = _ipatoolService.IsAvailable
-            ? "Enter another Apple Account. Its ipatool session and storefront will be kept separate."
+            ? "Enter another Apple Account. IPA Bridge creates protected local session access automatically."
             : "Install the official ipatool to continue adding this Apple Account.";
     }
 
     private void CancelAccountEdit()
     {
-        if (!RemovePendingAccountSession())
+        if (!RemoveUncommittedAccountSessions())
         {
             StatusMessage = "The temporary account session could not be removed. Select Cancel Adding Account again to retry.";
             return;
@@ -483,7 +524,7 @@ public sealed class StoreViewModel : ObservableObject
         ClearSecrets();
         StatusMessage = SelectedAccount is null
             ? "Add an Apple Account to continue."
-            : $"Selected {SelectedAccount.Email}.";
+            : BuildAccountReadyMessage(SelectedAccount);
     }
 
     private async Task RemoveSelectedAccountAsync()
@@ -497,47 +538,64 @@ public sealed class StoreViewModel : ObservableObject
         var accountIndex = Accounts.IndexOf(account);
         await RunBusyAsync("Removing local account profile…", async cancellationToken =>
         {
-            Accounts.Remove(account);
-            IsRemoveConfirmationVisible = false;
-            ApplySelectedAccount(Accounts.FirstOrDefault(), clearSecrets: true);
-            SyncAccountsToConfiguration();
+            if (!RemoveUncommittedAccountSessions())
+            {
+                throw new IOException(
+                    "The temporary account session could not be removed. Retry cleanup before removing this profile.");
+            }
+
+            _pendingAccountId = null;
+            var stagedSessionRemoval =
+                _ipatoolService.StageLocalAccountSessionRemoval(account);
             try
             {
+                Accounts.Remove(account);
+                IsRemoveConfirmationVisible = false;
+                ApplySelectedAccount(Accounts.FirstOrDefault(), clearSecrets: true);
+                SyncAccountsToConfiguration();
                 cancellationToken.ThrowIfCancellationRequested();
                 await _configurationService.SaveAsync();
             }
-            catch
+            catch (Exception saveException)
             {
-                Accounts.Insert(Math.Clamp(accountIndex, 0, Accounts.Count), account);
-                ApplySelectedAccount(account, clearSecrets: true);
-                IsRemoveConfirmationVisible = true;
-                SyncAccountsToConfiguration();
-                throw;
-            }
+                if (!Accounts.Contains(account))
+                {
+                    Accounts.Insert(Math.Clamp(accountIndex, 0, Accounts.Count), account);
+                }
 
-            try
-            {
-                _ipatoolService.RemoveLocalAccountSession(account);
-                StatusMessage = $"Removed {account.Email} and its local ipatool session from this PC.";
-                _addActivity("Apple Account removed", account.Email, true);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                Accounts.Insert(Math.Clamp(accountIndex, 0, Accounts.Count), account);
                 ApplySelectedAccount(account, clearSecrets: true);
                 IsRemoveConfirmationVisible = true;
                 SyncAccountsToConfiguration();
                 try
                 {
-                    await _configurationService.SaveAsync();
-                    StatusMessage = $"The local ipatool session could not be deleted, so {account.Email} remains available for another removal attempt: {exception.Message}";
+                    _ipatoolService.RollbackLocalAccountSessionRemoval(
+                        stagedSessionRemoval);
                 }
-                catch (Exception restoreException)
+                catch (Exception rollbackException) when (
+                    rollbackException is IOException or UnauthorizedAccessException)
                 {
-                    StatusMessage = $"The local session and profile could not be removed cleanly. Restart IPA Bridge before changing accounts: {restoreException.Message}";
+                    throw new IOException(
+                        "The profile save failed and its staged local session could not be restored. " +
+                        "IPA Bridge will retry recovery on the next launch.",
+                        new AggregateException(saveException, rollbackException));
                 }
 
-                _addActivity("Local account cleanup failed", exception.Message, false);
+                throw;
+            }
+
+            ForgetTransientLocalVaultState(account.Id);
+            try
+            {
+                _ipatoolService.CommitLocalAccountSessionRemoval(
+                    stagedSessionRemoval);
+                StatusMessage = $"Removed {account.Email} and its local ipatool session from this PC.";
+                _addActivity("Apple Account removed", account.Email, true);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                StatusMessage =
+                    $"Removed {account.Email}. Its isolated local session is quarantined and will be deleted automatically on the next launch: {exception.Message}";
+                _addActivity("Local account cleanup pending", exception.Message, false);
             }
         });
     }
@@ -583,7 +641,8 @@ public sealed class StoreViewModel : ObservableObject
             .Select(account => new AppleAccountProfile
             {
                 Id = account.Id,
-                Email = account.Email
+                Email = account.Email,
+                LocalVaultKey = account.LocalVaultKey
             })
             .ToList();
         _configurationService.Current.SelectedAppleAccountId = SelectedAccount?.Id ?? string.Empty;
@@ -624,7 +683,7 @@ public sealed class StoreViewModel : ObservableObject
             return;
         }
 
-        if (RemovePendingAccountSession())
+        if (RemoveUncommittedAccountSessions())
         {
             _pendingAccountId = null;
             IsAddingAccount = false;
@@ -637,6 +696,150 @@ public sealed class StoreViewModel : ObservableObject
         }
     }
 
+    private void CancelTwoFactor()
+    {
+        var cleanupSucceeded = TryRemoveTransientLocalAccountSession();
+        ApplePassword = string.Empty;
+        TwoFactorCode = string.Empty;
+        RequiresTwoFactor = false;
+        SetActiveAccount(null);
+        StatusMessage = cleanupSucceeded
+            ? "Verification canceled. Enter your Apple Account password to start again."
+            : "Verification canceled, but the temporary local session could not be removed. Retry or cancel account setup to clean it up.";
+    }
+
+    private string PrepareLocalVaultKey(AppleAccountProfile account)
+    {
+        if (_transientLocalVaultAccountId is not null &&
+            !string.Equals(
+                _transientLocalVaultAccountId,
+                account.Id,
+                StringComparison.Ordinal) &&
+            !TryRemoveTransientLocalAccountSession())
+        {
+            throw new IOException(
+                "The previous temporary local account session could not be removed. Retry cleanup before signing in with another profile.");
+        }
+
+        if (HasLocalVaultKey(account))
+        {
+            return account.LocalVaultKey;
+        }
+
+        if (string.Equals(
+                _transientLocalVaultAccountId,
+                account.Id,
+                StringComparison.Ordinal) &&
+            !string.IsNullOrEmpty(_transientLocalVaultKey))
+        {
+            return _transientLocalVaultKey;
+        }
+
+        // A profile with no saved key cannot safely reuse local ipatool data.
+        // Persisted legacy profiles expose this reset explicitly in the action
+        // label; new profiles can only have temporary residue from an earlier retry.
+        _ipatoolService.RemoveLocalAccountSession(account);
+
+        _transientLocalVaultAccountId = account.Id;
+        _transientLocalVaultKey = Convert.ToBase64String(
+            RandomNumberGenerator.GetBytes(LocalDataProtectionService.MasterKeySize));
+        return _transientLocalVaultKey;
+    }
+
+    private void ClearTransientLocalVaultKey()
+    {
+        _transientLocalVaultKey = string.Empty;
+    }
+
+    private void ForgetTransientLocalVaultState()
+    {
+        _transientLocalVaultAccountId = null;
+        _transientLocalVaultKey = string.Empty;
+    }
+
+    private void ForgetTransientLocalVaultState(string accountId)
+    {
+        if (string.Equals(
+                _transientLocalVaultAccountId,
+                accountId,
+                StringComparison.Ordinal))
+        {
+            ForgetTransientLocalVaultState();
+        }
+    }
+
+    private bool TryRemoveTransientLocalAccountSession()
+    {
+        if (_transientLocalVaultAccountId is null)
+        {
+            ClearTransientLocalVaultKey();
+            return true;
+        }
+
+        var accountId = _transientLocalVaultAccountId;
+        var removed = TryRemoveLocalAccountSession(new AppleAccountProfile
+        {
+            Id = accountId,
+            Email = Email
+        });
+        ClearTransientLocalVaultKey();
+        if (removed)
+        {
+            ForgetTransientLocalVaultState(accountId);
+        }
+
+        return removed;
+    }
+
+    private bool RemoveUncommittedAccountSessions()
+    {
+        if (!RemovePendingAccountSession())
+        {
+            return false;
+        }
+
+        return TryRemoveTransientLocalAccountSession();
+    }
+
+    private bool TryRemoveLocalAccountSession(AppleAccountProfile account)
+    {
+        try
+        {
+            _ipatoolService.RemoveLocalAccountSession(account);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _addActivity("Local account cleanup failed", exception.Message, false);
+            return false;
+        }
+    }
+
+    private static bool HasLocalVaultKey(AppleAccountProfile account)
+    {
+        return !string.IsNullOrWhiteSpace(account.LocalVaultKey);
+    }
+
+    private static string RequireLocalVaultKey(AppleAccountProfile account)
+    {
+        return HasLocalVaultKey(account)
+            ? account.LocalVaultKey
+            : throw new InvalidOperationException(
+                $"Reconnect {account.Email} once to create automatic protected local session access.");
+    }
+
+    private static bool IsSixDigitVerificationCode(string value)
+    {
+        return value.Length == 6 && value.All(character => character is >= '0' and <= '9');
+    }
+
+    private static string BuildAccountReadyMessage(AppleAccountProfile account)
+    {
+        return HasLocalVaultKey(account)
+            ? $"Selected {account.Email}. Its local session key is protected automatically; select Check Session to verify the sign-in."
+            : $"{account.Email} was saved by an earlier IPA Bridge version. Enter the Apple Account password, then select Reset Session & Sign In to replace only its old local sign-in with automatic protected access.";
+    }
+
     private bool CanLogin()
     {
         return !IsBusy &&
@@ -644,7 +847,7 @@ public sealed class StoreViewModel : ObservableObject
                (IsAddingAccount || SelectedAccount is not null) &&
                !string.IsNullOrWhiteSpace(Email) &&
                !string.IsNullOrWhiteSpace(ApplePassword) &&
-               !string.IsNullOrWhiteSpace(VaultPassphrase);
+               (!RequiresTwoFactor || IsSixDigitVerificationCode(TwoFactorCode));
     }
 
     private bool CanCheckAccount()
@@ -653,7 +856,7 @@ public sealed class StoreViewModel : ObservableObject
                _ipatoolService.IsAvailable &&
                SelectedAccount is not null &&
                !IsAddingAccount &&
-               !string.IsNullOrWhiteSpace(VaultPassphrase);
+               HasLocalVaultKey(SelectedAccount);
     }
 
     private bool CanSearch()
@@ -664,7 +867,7 @@ public sealed class StoreViewModel : ObservableObject
                IsLoggedIn &&
                !IsAddingAccount &&
                !string.IsNullOrWhiteSpace(SearchQuery) &&
-               !string.IsNullOrWhiteSpace(VaultPassphrase);
+               HasLocalVaultKey(SelectedAccount);
     }
 
     private bool CanDownload()
@@ -674,22 +877,31 @@ public sealed class StoreViewModel : ObservableObject
                IsLoggedIn &&
                !IsAddingAccount &&
                SelectedApp is not null &&
-               !string.IsNullOrWhiteSpace(VaultPassphrase);
+               HasLocalVaultKey(SelectedAccount);
     }
 
     private async Task LoginAsync()
     {
         var requestedEmail = Email.Trim();
-        var account = IsAddingAccount
+        var matchingAccount = IsAddingAccount
             ? Accounts.FirstOrDefault(existing => string.Equals(
-                  existing.Email,
-                  requestedEmail,
-                  StringComparison.OrdinalIgnoreCase))
-              ?? new AppleAccountProfile
-              {
-                  Id = _pendingAccountId ?? Guid.NewGuid().ToString("N"),
-                  Email = requestedEmail
-              }
+                existing.Email,
+                requestedEmail,
+                StringComparison.OrdinalIgnoreCase))
+            : null;
+        if (matchingAccount is not null)
+        {
+            StatusMessage =
+                $"{matchingAccount.Email} already has a local profile. Cancel adding, select that profile, and sign in there.";
+            return;
+        }
+
+        var account = IsAddingAccount
+            ? new AppleAccountProfile
+            {
+                Id = _pendingAccountId ?? Guid.NewGuid().ToString("N"),
+                Email = requestedEmail
+            }
             : SelectedAccount;
         if (account is null)
         {
@@ -698,6 +910,7 @@ public sealed class StoreViewModel : ObservableObject
 
         var accountWasPersisted = Accounts.Contains(account);
         var originalEmail = account.Email;
+        var originalLocalVaultKey = account.LocalVaultKey;
         var previousSelectedAccount = SelectedAccount;
 
         // A login attempt can replace the isolated ipatool session. Require a
@@ -705,13 +918,23 @@ public sealed class StoreViewModel : ObservableObject
         SetActiveAccount(null);
         await RunBusyAsync("Signing in securely…", async cancellationToken =>
         {
+            var wasVerifyingTwoFactor = RequiresTwoFactor;
+            var localVaultKey = PrepareLocalVaultKey(account);
             var result = await _ipatoolService.LoginAsync(
                 account,
                 ApplePassword,
                 string.IsNullOrWhiteSpace(TwoFactorCode) ? null : TwoFactorCode.Trim(),
-                VaultPassphrase,
+                localVaultKey,
                 cancellationToken);
-            RequiresTwoFactor = result.RequiresTwoFactor;
+            RequiresTwoFactor = result.RequiresTwoFactor ||
+                                (wasVerifyingTwoFactor && !result.Success);
+            if (wasVerifyingTwoFactor && RequiresTwoFactor && !result.Success)
+            {
+                // The panel stays visible after a rejected code, so publish a
+                // focus cue even though the Boolean state itself did not change.
+                OnPropertyChanged(nameof(RequiresTwoFactor));
+            }
+
             StatusMessage = result.Message;
             if (result.Success && result.Account is not null)
             {
@@ -724,9 +947,10 @@ public sealed class StoreViewModel : ObservableObject
                         StringComparison.OrdinalIgnoreCase));
                 if (duplicate is not null)
                 {
-                    if (!Accounts.Contains(account))
+                    _ipatoolService.RemoveLocalAccountSession(account);
+                    ForgetTransientLocalVaultState(account.Id);
+                    if (!accountWasPersisted)
                     {
-                        _ipatoolService.RemoveLocalAccountSession(account);
                         _pendingAccountId = Guid.NewGuid().ToString("N");
                     }
 
@@ -735,6 +959,7 @@ public sealed class StoreViewModel : ObservableObject
                 }
 
                 account.Email = result.Account.Email;
+                account.LocalVaultKey = localVaultKey;
                 if (!Accounts.Contains(account))
                 {
                     Accounts.Add(account);
@@ -768,6 +993,7 @@ public sealed class StoreViewModel : ObservableObject
                         var temporarySessionRemoved = RemovePendingAccountSession();
                         if (temporarySessionRemoved)
                         {
+                            ForgetTransientLocalVaultState(account.Id);
                             _pendingAccountId = Guid.NewGuid().ToString("N");
                         }
 
@@ -782,16 +1008,32 @@ public sealed class StoreViewModel : ObservableObject
                     else
                     {
                         account.Email = originalEmail;
+                        account.LocalVaultKey = originalLocalVaultKey;
+                        IpatoolAccountInfo? restoredActiveAccount = result.Account;
+                        if (string.IsNullOrEmpty(originalLocalVaultKey))
+                        {
+                            var temporarySessionRemoved = TryRemoveLocalAccountSession(account);
+                            restoredActiveAccount = null;
+                            StatusMessage = temporarySessionRemoved
+                                ? $"The account connected, but its generated key could not be saved. The temporary local session was removed: {exception.Message}"
+                                : $"The account connected, but neither its generated key nor the temporary local session could be saved cleanly: {exception.Message}";
+                        }
+                        else
+                        {
+                            StatusMessage = $"The account connected, but updated profile metadata could not be saved: {exception.Message}";
+                        }
+
                         ApplySelectedAccount(previousSelectedAccount, clearSecrets: false);
-                        SetActiveAccount(result.Account);
-                        StatusMessage = $"The account connected, but updated profile metadata could not be saved: {exception.Message}";
+                        SetActiveAccount(restoredActiveAccount);
                     }
 
                     SyncAccountsToConfiguration();
+                    ClearTransientLocalVaultKey();
                     _addActivity("Apple Account profile save failed", exception.Message, false);
                     return;
                 }
 
+                ForgetTransientLocalVaultState();
                 StatusMessage = $"Connected {result.Account.Email}. Searches and purchases now use this account's App Store region.";
             }
             else
@@ -801,7 +1043,11 @@ public sealed class StoreViewModel : ObservableObject
 
             _addActivity("App Store sign-in", result.Message, result.Success);
         });
-        ApplePassword = string.Empty;
+        if (!RequiresTwoFactor)
+        {
+            ApplePassword = string.Empty;
+        }
+
         TwoFactorCode = string.Empty;
     }
 
@@ -818,7 +1064,7 @@ public sealed class StoreViewModel : ObservableObject
         {
             var accountInfo = await _ipatoolService.GetStoredAccountAsync(
                 account,
-                VaultPassphrase,
+                RequireLocalVaultKey(account),
                 cancellationToken);
             var matches = accountInfo is not null && string.Equals(
                 accountInfo.Email,
@@ -846,7 +1092,7 @@ public sealed class StoreViewModel : ObservableObject
             var apps = await _ipatoolService.SearchAsync(
                 account,
                 SearchQuery.Trim(),
-                VaultPassphrase,
+                RequireLocalVaultKey(account),
                 cancellationToken);
             SearchResults.Clear();
             foreach (var app in apps)
@@ -911,7 +1157,7 @@ public sealed class StoreViewModel : ObservableObject
                     versions = await _ipatoolService.ListVersionsAsync(
                         account,
                         app,
-                        VaultPassphrase,
+                        RequireLocalVaultKey(account),
                         progress,
                         linkedCancellation.Token);
                 }
@@ -963,7 +1209,7 @@ public sealed class StoreViewModel : ObservableObject
                 account,
                 app,
                 _configurationService.Current.DownloadDirectory,
-                VaultPassphrase,
+                RequireLocalVaultKey(account),
                 SelectedVersionIdentifier,
                 cancellationToken: cancellationToken);
             StatusMessage = $"Download complete for {account.Email}: {Path.GetFileName(path)}";
@@ -1026,6 +1272,7 @@ public sealed class StoreViewModel : ObservableObject
         RequestRemoveAccountCommand.NotifyCanExecuteChanged();
         CancelRemoveAccountCommand.NotifyCanExecuteChanged();
         ConfirmRemoveAccountCommand.NotifyCanExecuteChanged();
+        CancelTwoFactorCommand.NotifyCanExecuteChanged();
     }
 
     private void NotifyAccountCollectionStateChanged()

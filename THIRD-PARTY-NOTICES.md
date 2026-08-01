@@ -23,12 +23,12 @@ The MIT source and package notices do not describe every Windows-native binary i
 ## majd/ipatool
 
 - Source: https://github.com/majd/ipatool
-- Version pinned by this source tree: v2.3.0
+- Version pinned by this source tree: v2.3.1
 - License: MIT
 - Purpose: App Store authentication, search, licensing and encrypted IPA download
-- Windows AMD64 archive: ipatool-2.3.0-windows-amd64.tar.gz, SHA-256 eaf208f0fee964a82f14f8eda60c4b0568fe555ad97729bb74277d3d7c0e4d54
-- Windows ARM64 archive: ipatool-2.3.0-windows-arm64.tar.gz, SHA-256 690d94332802f5fca604cce29ac9762089c7271c30a68e64eeb462c605e1fa07
-- Distribution: After an explicit user action, the application downloads the architecture-specific asset directly from the official v2.3.0 GitHub Release and verifies it against the corresponding SHA-256 value embedded in this source tree. It does not rely on releases/latest or a mutable upstream checksum file.
+- Windows AMD64 archive: ipatool-2.3.1-windows-amd64.tar.gz, SHA-256 8e986ed9320f205bcd1fd24640ec46a5b92ff346425aff28d1103e57d2fdcadb
+- Windows ARM64 archive: ipatool-2.3.1-windows-arm64.tar.gz, SHA-256 661ffbee49d25f46c463a2b38cd05b08048a4c939a194825b9e3316ad0867da9
+- Distribution: After an explicit user action, the application downloads the architecture-specific asset directly from the official v2.3.1 GitHub Release and verifies it against the corresponding SHA-256 value embedded in this source tree. It does not rely on releases/latest or a mutable upstream checksum file.
 
 ## jkcoxson/idevice
 

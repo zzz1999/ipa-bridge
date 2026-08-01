@@ -12,7 +12,7 @@ No third-party .NET package is required by the desktop application.
 
 ## Local configuration protection
 
-`ConfigurationService` persists the complete `AppConfiguration` in `%LOCALAPPDATA%\IPA Bridge\settings.secure.json`. The file is a versioned envelope rather than a directly deserializable configuration, which also prevents an older IPA Bridge build from treating encrypted data as an empty configuration and overwriting it.
+`ConfigurationService` persists the complete `AppConfiguration` in `%LOCALAPPDATA%\IPA Bridge\settings.secure.json`. This includes the generated per-account local vault keys. The file is a versioned envelope rather than a directly deserializable configuration, which also prevents an older IPA Bridge build from treating encrypted data as an empty configuration and overwriting it.
 
 On the first `LoadAsync`, `LocalDataProtectionService` generates 32 bytes with the platform cryptographic random-number generator. Windows Data Protection API protects that master key with `DataProtectionScope.CurrentUser`, optional application-specific entropy, and its built-in integrity protection. Only the protected blob is atomically committed as `master-key.v1`.
 
@@ -20,21 +20,23 @@ The serialized configuration is encrypted with AES-256-GCM using a fresh 12-byte
 
 An earlier plaintext `settings.json` is handled as a one-time migration source. IPA Bridge commits the protected key, writes the encrypted envelope, reopens and authenticates it, compares every configuration field, and only then removes the legacy file. Unknown configuration fields are rejected so an older schema cannot silently discard data. If both files exist with identical values, the verified encrypted file completes the interrupted migration. If their values differ, loading and all later saves fail closed while both files remain untouched. A missing key, a DPAPI failure, an unsupported envelope, or failed AES-GCM authentication likewise stops loading without generating a replacement or overwriting the encrypted data.
 
-Configuration schema version 2 stores a list of Apple Account profiles and the selected profile ID. Normalization trims emails, deduplicates them case-insensitively, requires opaque GUID profile IDs, and repairs a missing selection deterministically. Loading schema version 1 migrates its single saved email into one selected profile and immediately rewrites the encrypted envelope so the generated profile ID remains stable. The former default-home `%USERPROFILE%\.ipatool` session is not copied automatically; the user reconnects once so the new isolated profile is populated and verified by `auth info`.
+Configuration schema version 3 stores a list of Apple Account profiles, a generated 256-bit local vault key for each newly connected profile, and the selected profile ID. Normalization trims emails, deduplicates them case-insensitively, requires opaque GUID profile IDs, validates every nonempty vault key as exactly 32 Base64-encoded bytes, and repairs a missing selection deterministically. Loading schema version 1 migrates its single saved email into one selected profile; loading schema version 2 preserves its profiles with empty keys. Both are immediately rewritten so generated IDs remain stable. Because the old manual vault passphrase was deliberately never saved, a schema-2 profile requires an explicit **Reset Session & Sign In** action before IPA Bridge deletes only that profile's old isolated sign-in and creates automatic protected access. The former default-home `%USERPROFILE%\.ipatool` session is not copied automatically.
 
-This boundary covers only IPA Bridge's settings. Apple passwords, two-factor codes, and ipatool vault passphrases remain non-persistent and pass to ipatool through ConPTY. Downloaded IPAs, installed tools, pairing records, per-profile ipatool files, and other external files are not encrypted by the IPA Bridge settings key. Windows `CurrentUser` protection also does not defend against code already executing as the same user or against a compromised live session.
+This boundary covers only IPA Bridge's settings. Apple passwords and two-factor codes remain non-persistent and pass to ipatool through ConPTY. The generated per-account vault keys are persisted inside that encrypted boundary so the user is not prompted for them. Downloaded IPAs, installed tools, pairing records, per-profile ipatool files, and other external files are not encrypted by the IPA Bridge settings key. Windows `CurrentUser` protection also does not defend against code already executing as the same user or against a compromised live session.
 
 ## Authentication flow
 
-`ipatool` uses terminal-only password readers for the Apple password and keyring passphrase. Passing the corresponding command flags would expose values in the Windows process command line.
+`ipatool` uses terminal-only password readers for the Apple password and keyring passphrase. IPA Bridge generates the latter independently for each profile. Passing either value through command flags would expose it in the Windows process command line.
 
 `ConPtyProcessRunner` therefore creates a Windows pseudo console, starts `ipatool` without sensitive command flags, watches for known terminal prompts and writes each secret through the pseudo-console input pipe. Returned output is redacted against every supplied secret before it leaves the runner.
 
-If the account requires two-factor authentication and no code was supplied, the pseudo-console process is ended and the view model reveals the two-factor field. The user then retries; the code is supplied only when the terminal requests it.
+If the account requires two-factor authentication and no code was supplied, the pseudo-console process is ended and the view model replaces the credentials form with a dedicated six-digit verification panel. The Apple password and the same pending generated vault key remain only in memory across this two-step exchange. **Verify & Continue** starts a second login process and supplies the code only when the terminal requests it; success, cancellation, or leaving the page clears the transient Apple secrets.
 
-Each Apple Account profile has a separate directory below `%LOCALAPPDATA%\IPA Bridge\Accounts\<profile-id>`. For every authenticated ipatool process, IPA Bridge overrides `HOME`, `USERPROFILE`, `HOMEDRIVE`, and `HOMEPATH` in that child process only. ipatool v2.3.0 therefore resolves a different `<home>\.ipatool` directory for every profile without changing IPA Bridge's own process environment.
+Each Apple Account profile has a separate directory below `%LOCALAPPDATA%\IPA Bridge\Accounts\<profile-id>`. For every authenticated ipatool process, IPA Bridge overrides `HOME`, `USERPROFILE`, `HOMEDRIVE`, and `HOMEPATH` in that child process only. ipatool v2.3.1 therefore resolves a different `<home>\.ipatool` directory for every profile without changing IPA Bridge's own process environment.
 
-The isolated `.ipatool` data has two distinct protection properties: ipatool encrypts its account record with the profile's vault passphrase, while its cookie jar is a separate file that relies on the Windows user profile and inherited filesystem access controls. The IPA Bridge AES-GCM settings key does not encrypt either file.
+The isolated `.ipatool` data has two distinct protection properties: ipatool encrypts its account record with the generated profile vault key, while its cookie jar is a separate file that relies on the Windows user profile and inherited filesystem access controls. IPA Bridge's AES-GCM envelope protects the generated key but does not directly encrypt either ipatool file.
+
+Profile removal is a recoverable local transaction. `IpatoolService` first moves the isolated profile directory into `Accounts\.pending-session-removals`, then `StoreViewModel` commits the encrypted configuration without that profile. A failed configuration save moves the directory back before returning the profile to the UI. If final quarantine deletion is interrupted, the next startup compares the staged profile ID with the authenticated configuration: an active profile is restored, while an absent profile is deleted. Temporary login and two-factor cleanup likewise retains a profile ID until its incomplete session is deleted, and account switching is blocked while that cleanup cannot complete.
 
 Login records the storefront returned by Apple in the selected profile's ipatool account record. Search, license acquisition, version lookup, and download all execute in that same profile environment, so they use that Apple-assigned storefront. IPA Bridge does not infer a country from an email address, IP address, or Windows locale. Before every authenticated App Store operation, `auth info` must return the email assigned to the selected profile; a missing or mismatched session stops the operation and clears the connected state.
 
@@ -46,10 +48,10 @@ Successful metadata is cached for the application session with the account profi
 
 ## Tool supply chain
 
-IPA Bridge pins the reviewed `ipatool` v2.3.0 packages and SHA-256 values in source. It:
+IPA Bridge pins the reviewed `ipatool` v2.3.1 packages and SHA-256 values in source. It:
 
 1. Selects the embedded `windows-amd64` or `windows-arm64` package definition for the current process architecture.
-2. Downloads the archive directly from the official v2.3.0 GitHub Release.
+2. Downloads the archive directly from the official v2.3.1 GitHub Release.
 3. Verifies the archive against the corresponding embedded SHA-256 value.
 4. Extracts only after verification and records `SOURCE.json` in a new versioned directory.
 5. Saves the new configured path only after installation succeeds; a failure restores the previous configuration and removes the uncommitted directory.

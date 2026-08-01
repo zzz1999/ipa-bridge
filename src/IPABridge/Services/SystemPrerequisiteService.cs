@@ -485,12 +485,37 @@ public sealed partial class SystemPrerequisiteService
         return Version.TryParse(value, out var version) ? version : new Version(0, 0);
     }
 
-    private static string? ExtractProbeFailure(string output)
+    internal static string? ExtractProbeFailure(string output)
     {
-        return AnsiEscapePattern()
-            .Replace(output, string.Empty)
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .LastOrDefault();
+        var sanitized = AnsiEscapePattern().Replace(output, string.Empty);
+        if (sanitized.Contains("code: 10061", StringComparison.OrdinalIgnoreCase) ||
+            sanitized.Contains("actively refused", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Apple device transport is not running.";
+        }
+
+        if (sanitized.Contains(
+                "Failed to parse USBMUXD_SOCKET_ADDRESS",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "The USBMUXD_SOCKET_ADDRESS setting is invalid.";
+        }
+
+        // Rust panic boilerplate is an implementation detail, not a useful recovery step.
+        var lines = sanitized.Split(
+            ['\r', '\n'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return lines
+            .Where(line => !IsProbeDiagnosticNoise(line))
+            .LastOrDefault() ??
+            (lines.Length > 0 ? "The device communication tool stopped unexpectedly." : null);
+    }
+
+    private static bool IsProbeDiagnosticNoise(string line)
+    {
+        return line.StartsWith("thread '", StringComparison.OrdinalIgnoreCase) ||
+               line.StartsWith("stack backtrace", StringComparison.OrdinalIgnoreCase) ||
+               line.StartsWith("note:", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryOpenUri(string uri)

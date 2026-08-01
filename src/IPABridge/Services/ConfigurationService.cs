@@ -319,7 +319,9 @@ public sealed class ConfigurationService
             profile.TryGetProperty(nameof(AppleAccountProfile.Id), out var id) &&
             id.ValueKind == JsonValueKind.String &&
             profile.TryGetProperty(nameof(AppleAccountProfile.Email), out var email) &&
-            email.ValueKind == JsonValueKind.String);
+            email.ValueKind == JsonValueKind.String &&
+            profile.TryGetProperty(nameof(AppleAccountProfile.LocalVaultKey), out var localVaultKey) &&
+            localVaultKey.ValueKind == JsonValueKind.String);
     }
 
     private static ConfigurationNormalizationResult NormalizeConfiguration(
@@ -365,8 +367,16 @@ public sealed class ConfigurationService
 
             var originalId = profile.Id;
             var id = NormalizeProfileId(profile.Id, sourceDescription);
+            var originalLocalVaultKey = profile.LocalVaultKey;
+            var localVaultKey = NormalizeLocalVaultKey(
+                profile.LocalVaultKey,
+                sourceDescription);
             changed |= !string.Equals(originalEmail, email, StringComparison.Ordinal) ||
-                       !string.Equals(originalId, id, StringComparison.Ordinal);
+                       !string.Equals(originalId, id, StringComparison.Ordinal) ||
+                       !string.Equals(
+                           originalLocalVaultKey,
+                           localVaultKey,
+                           StringComparison.Ordinal);
             if (profilesByEmail.TryGetValue(email, out var existingProfile))
             {
                 changed = true;
@@ -386,6 +396,7 @@ public sealed class ConfigurationService
 
             profile.Id = id;
             profile.Email = email;
+            profile.LocalVaultKey = localVaultKey;
             profilesByEmail.Add(email, profile);
             normalizedProfiles.Add(profile);
         }
@@ -465,6 +476,42 @@ public sealed class ConfigurationService
             : string.Empty;
     }
 
+    private static string NormalizeLocalVaultKey(string? value, string sourceDescription)
+    {
+        var candidate = value?.Trim();
+        if (string.IsNullOrEmpty(candidate))
+        {
+            return string.Empty;
+        }
+
+        byte[] keyBytes;
+        try
+        {
+            keyBytes = Convert.FromBase64String(candidate);
+        }
+        catch (FormatException exception)
+        {
+            throw new InvalidDataException(
+                $"The {sourceDescription} settings file contains an invalid local vault key.",
+                exception);
+        }
+
+        try
+        {
+            if (keyBytes.Length != LocalDataProtectionService.MasterKeySize)
+            {
+                throw new InvalidDataException(
+                    $"The {sourceDescription} settings file contains a local vault key with an invalid length.");
+            }
+
+            return Convert.ToBase64String(keyBytes);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(keyBytes);
+        }
+    }
+
     private void EnsureDirectories()
     {
         if (_usesApplicationDirectories)
@@ -518,7 +565,11 @@ public sealed class ConfigurationService
                 !string.Equals(
                     first[index].Email,
                     second[index].Email,
-                    StringComparison.OrdinalIgnoreCase))
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    first[index].LocalVaultKey,
+                    second[index].LocalVaultKey,
+                    StringComparison.Ordinal))
             {
                 return false;
             }

@@ -42,7 +42,10 @@
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
-          <TextBlock Style="{StaticResource BodyTextStyle}"
+          <TextBlock x:Name="StoreStatusText"
+                     AutomationProperties.LiveSetting="Polite"
+                     AutomationProperties.Name="{Binding Store.StatusMessage}"
+                     Style="{StaticResource BodyTextStyle}"
                      Text="{Binding Store.StatusMessage}"
                      TextTrimming="CharacterEllipsis" />
           <StackPanel Grid.Column="1"
@@ -198,7 +201,8 @@
     </Border>
 
     <Border Grid.Column="2" Style="{StaticResource CardStyle}">
-      <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <ScrollViewer x:Name="AppleAccountScrollViewer"
+                    VerticalScrollBarVisibility="Auto">
         <StackPanel>
           <Border Width="52"
                   Height="52"
@@ -460,68 +464,113 @@
 
             <StackPanel x:Name="AccountCredentialsPanel"
                         Visibility="{Binding Settings.IsIpatoolAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
-              <TextBlock Margin="2,12,0,6" Style="{StaticResource CaptionTextStyle}" Text="Apple Account email" />
-              <TextBox x:Name="AppleAccountEmailBox"
-                       AutomationProperties.HelpText="The email address for the Apple Account used by this isolated ipatool session."
-                       AutomationProperties.Name="Apple Account email"
-                       IsReadOnly="{Binding Store.IsAccountEmailReadOnly}"
-                       Text="{Binding Store.Email, UpdateSourceTrigger=PropertyChanged}" />
+              <StackPanel x:Name="PrimaryAccountCredentialsPanel"
+                          Visibility="{Binding Store.RequiresTwoFactor, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                <TextBlock Margin="2,12,0,6" Style="{StaticResource CaptionTextStyle}" Text="Apple Account email" />
+                <TextBox x:Name="AppleAccountEmailBox"
+                         AutomationProperties.HelpText="The email address for the Apple Account used by this isolated ipatool session."
+                         AutomationProperties.Name="Apple Account email"
+                         IsReadOnly="{Binding Store.IsAccountEmailReadOnly}"
+                         Text="{Binding Store.Email, UpdateSourceTrigger=PropertyChanged}" />
 
-              <TextBlock Margin="2,13,0,6" Style="{StaticResource CaptionTextStyle}" Text="Apple Account password" />
-              <PasswordBox x:Name="ApplePasswordBox"
-                           AutomationProperties.HelpText="Used only for this sign-in and never written to IPA Bridge settings."
-                           AutomationProperties.Name="Apple Account password"
-                           PasswordChanged="ApplePasswordBox_OnPasswordChanged" />
+                <TextBlock Margin="2,13,0,6" Style="{StaticResource CaptionTextStyle}" Text="Apple Account password" />
+                <PasswordBox x:Name="ApplePasswordBox"
+                             AutomationProperties.HelpText="Used only for this sign-in and never written to IPA Bridge settings."
+                             AutomationProperties.Name="Apple Account password"
+                             PasswordChanged="ApplePasswordBox_OnPasswordChanged" />
 
-              <StackPanel Visibility="{Binding Store.RequiresTwoFactor, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <TextBlock Margin="2,13,0,6"
-                           Style="{StaticResource CaptionTextStyle}"
-                           Foreground="{StaticResource OrangeBrush}"
-                           Text="Two-factor authentication code" />
-                <PasswordBox x:Name="TwoFactorCodeBox"
-                             AutomationProperties.HelpText="The current verification code requested by Apple."
-                             AutomationProperties.Name="Two-factor authentication code"
-                             PasswordChar="●"
-                             PasswordChanged="TwoFactorCodeBox_OnPasswordChanged" />
+                <Border Margin="0,13,0,0"
+                        Padding="14"
+                        Background="{StaticResource OrangeSoftBrush}"
+                        CornerRadius="17"
+                        Visibility="{Binding Store.RequiresLegacySessionReset, Converter={StaticResource BooleanToVisibilityConverter}}">
+                  <StackPanel>
+                    <TextBlock FontWeight="SemiBold"
+                               Foreground="#9A5A12"
+                               Text="One-time local session upgrade" />
+                    <TextBlock Margin="0,5,0,0"
+                               Style="{StaticResource CaptionTextStyle}"
+                               Foreground="#895318"
+                               Text="This profile predates automatic protected access. Reset Session &amp; Sign In removes only its old local ipatool sign-in, then creates a new key inside encrypted IPA Bridge settings. Downloaded IPA files are not removed."
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                </Border>
+
+                <Button x:Name="AddAccountSignInButton"
+                        Margin="0,18,0,0"
+                        Padding="16,11"
+                        AutomationProperties.Name="Add Apple Account and sign in"
+                        Command="{Binding Store.LoginCommand}"
+                        Content="Add &amp; Sign In"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Visibility="{Binding Store.IsAddingAccount, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                <Grid x:Name="ExistingAccountSessionActions"
+                      Margin="0,18,0,0"
+                      Visibility="{Binding Store.IsAddingAccount, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <Button Padding="16,11"
+                          Style="{StaticResource SecondaryButtonStyle}"
+                          Command="{Binding Store.CheckAccountCommand}"
+                          Content="Check Session" />
+                  <Button Grid.Column="2"
+                          Padding="16,11"
+                          AutomationProperties.Name="Reconnect selected Apple Account"
+                          Style="{StaticResource PrimaryButtonStyle}"
+                          Command="{Binding Store.LoginCommand}"
+                          Content="{Binding Store.AccountActionLabel}" />
+                </Grid>
               </StackPanel>
 
-              <TextBlock Margin="2,13,0,6" Style="{StaticResource CaptionTextStyle}" Text="Local vault passphrase" />
-              <PasswordBox x:Name="VaultPassphraseBox"
-                           AutomationProperties.HelpText="Protects the isolated ipatool sign-in stored on this PC."
-                           AutomationProperties.Name="Local vault passphrase"
-                           PasswordChanged="VaultPassphraseBox_OnPasswordChanged" />
-              <TextBlock Margin="2,6,0,0"
-                         Style="{StaticResource CaptionTextStyle}"
-                         Text="This differs from your Apple password and protects the sign-in saved locally by ipatool."
-                         TextWrapping="Wrap" />
-
-              <Button x:Name="AddAccountSignInButton"
-                      Margin="0,18,0,0"
-                      Padding="16,11"
-                      AutomationProperties.Name="Add Apple Account and sign in"
-                      Command="{Binding Store.LoginCommand}"
-                      Content="Add &amp; Sign In"
-                      Style="{StaticResource PrimaryButtonStyle}"
-                      Visibility="{Binding Store.IsAddingAccount, Converter={StaticResource BooleanToVisibilityConverter}}" />
-
-              <Grid x:Name="ExistingAccountSessionActions"
-                    Margin="0,18,0,0"
-                    Visibility="{Binding Store.IsAddingAccount, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="8" />
-                  <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Button Padding="16,11"
-                        Style="{StaticResource SecondaryButtonStyle}"
-                        Command="{Binding Store.CheckAccountCommand}"
-                        Content="Check Session" />
-                <Button Grid.Column="2"
-                        Padding="16,11"
-                        Style="{StaticResource PrimaryButtonStyle}"
-                        Command="{Binding Store.LoginCommand}"
-                        Content="{Binding Store.AccountActionLabel}" />
-              </Grid>
+              <Border x:Name="TwoFactorVerificationPanel"
+                      Margin="0,14,0,0"
+                      Padding="16"
+                      Background="{StaticResource AccentSoftBrush}"
+                      CornerRadius="20"
+                      Visibility="{Binding Store.RequiresTwoFactor, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel>
+                  <TextBlock Style="{StaticResource SectionTitleStyle}"
+                             Text="Enter verification code" />
+                  <TextBlock Margin="0,5,0,0"
+                             Style="{StaticResource CaptionTextStyle}"
+                             Text="Enter the 6-digit code sent to your trusted Apple device or phone number."
+                             TextWrapping="Wrap" />
+                  <TextBox x:Name="TwoFactorCodeBox"
+                           Margin="0,14,0,0"
+                           MaxLength="6"
+                           Padding="12,10"
+                           HorizontalContentAlignment="Center"
+                           AutomationProperties.HelpText="Enter the six ASCII digits requested by Apple."
+                           AutomationProperties.Name="Apple two-factor verification code"
+                           FontSize="24"
+                           FontWeight="SemiBold"
+                           InputMethod.IsInputMethodEnabled="False"
+                           PreviewTextInput="TwoFactorCodeBox_OnPreviewTextInput"
+                           Text="{Binding Store.TwoFactorCode, UpdateSourceTrigger=PropertyChanged}" />
+                  <Grid Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="8" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="TwoFactorBackButton"
+                            Command="{Binding Store.CancelTwoFactorCommand}"
+                            Content="Back"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                    <Button x:Name="TwoFactorVerifyButton"
+                            Grid.Column="2"
+                            AutomationProperties.Name="Verify Apple two-factor code and continue"
+                            Command="{Binding Store.LoginCommand}"
+                            Content="Verify &amp; Continue"
+                            IsDefault="True"
+                            Style="{StaticResource PrimaryButtonStyle}" />
+                  </Grid>
+                </StackPanel>
+              </Border>
             </StackPanel>
 
             <Button Margin="0,9,0,0"

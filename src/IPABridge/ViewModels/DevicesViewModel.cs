@@ -126,6 +126,9 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
 
             HasAppleDeviceSupport = value.IsReady;
             OnPropertyChanged(nameof(AppleDeviceSupportDetail));
+            OnPropertyChanged(nameof(NeedsAppleDevicesInstallation));
+            OnPropertyChanged(nameof(NeedsAppleDevicesLaunch));
+            OnPropertyChanged(nameof(NeedsDeviceToolsRepair));
         }
     }
 
@@ -156,13 +159,37 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
                 return "Install or select the iOS device tools to run the required idevice_id communication probe.";
             }
 
+            if (NeedsAppleDevicesInstallation)
+            {
+                return AppleDeviceSupport.IsUsbDriverInstalled == true
+                    ? "The Apple USB driver is installed, but Apple Devices is not installed and its local device transport is not running. Install Apple Devices from Microsoft Store, open it once, then reconnect your iPhone or iPad."
+                    : "Apple Devices is not installed and its local device transport is not running. Install Apple Devices from Microsoft Store, open it once, then reconnect your iPhone or iPad.";
+            }
+
+            if (NeedsAppleDevicesLaunch)
+            {
+                return "Apple Devices is installed, but its local device transport is not running. Open Apple Devices, reconnect your iPhone or iPad, then check again.";
+            }
+
+            if (NeedsDeviceToolsRepair)
+            {
+                return "The local Apple transport is reachable, but idevice-tools could not complete a protocol check. Reinstall the verified device tools or select a compatible libimobiledevice folder in Settings.";
+            }
+
+            if (AppleDeviceSupport.IsTransportServiceRegistered &&
+                !AppleDeviceSupport.IsTransportEndpointReachable)
+            {
+                return "Apple Mobile Device Service is registered, but its local transport is unavailable. Start or repair the service, reconnect your iPhone or iPad, then check again.";
+            }
+
             var detectedComponents = AppleDeviceSupport.IsAppleDevicesInstalled ||
                                      AppleDeviceSupport.IsUsbDriverInstalled == true
                 ? "Apple device components were detected, but"
                 : "Apple device support is not operational because";
-            var error = string.IsNullOrWhiteSpace(AppleDeviceSupport.BackendProbeError)
+            var backendError = AppleDeviceSupport.BackendProbeError;
+            var error = string.IsNullOrWhiteSpace(backendError)
                 ? string.Empty
-                : $" ({AppleDeviceSupport.BackendProbeError})";
+                : $": {backendError.Trim().TrimEnd('.')}";
             var endpointHint = AppleDeviceSupport.IsTransportEndpointReachable
                 ? " The local Apple endpoint is reachable, but that diagnostic alone does not establish readiness."
                 : string.Empty;
@@ -171,6 +198,25 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
     }
 
     public bool AreDeviceToolsAvailable => _deviceService.ToolLocation.IsAvailable;
+
+    public bool NeedsAppleDevicesInstallation =>
+        AppleDeviceSupport.HasBeenChecked &&
+        AppleDeviceSupport.IsBackendProbeSuccessful == false &&
+        !AppleDeviceSupport.IsAppleDevicesInstalled &&
+        !AppleDeviceSupport.IsTransportServiceRegistered &&
+        !AppleDeviceSupport.IsTransportEndpointReachable;
+
+    public bool NeedsAppleDevicesLaunch =>
+        AppleDeviceSupport.HasBeenChecked &&
+        AppleDeviceSupport.IsBackendProbeSuccessful == false &&
+        AppleDeviceSupport.IsAppleDevicesInstalled &&
+        !AppleDeviceSupport.IsTransportEndpointReachable;
+
+    public bool NeedsDeviceToolsRepair =>
+        AppleDeviceSupport.HasBeenChecked &&
+        AppleDeviceSupport.IsBackendProbeSuccessful == false &&
+        AppleDeviceSupport.IsTransportEndpointReachable &&
+        AreDeviceToolsAvailable;
 
     public bool IsDeviceScanAvailable => HasOperationalDeviceEnvironment();
 
@@ -264,6 +310,9 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
         AppleDeviceSupport = status;
         ApplyAutomaticRefreshPreference();
         OnPropertyChanged(nameof(AreDeviceToolsAvailable));
+        OnPropertyChanged(nameof(NeedsAppleDevicesInstallation));
+        OnPropertyChanged(nameof(NeedsAppleDevicesLaunch));
+        OnPropertyChanged(nameof(NeedsDeviceToolsRepair));
         OnPropertyChanged(nameof(IsDeviceScanAvailable));
         OnPropertyChanged(nameof(DeviceToolsLabel));
         RefreshCommand.NotifyCanExecuteChanged();

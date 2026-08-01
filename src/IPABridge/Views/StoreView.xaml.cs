@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
+using System.Windows.Input;
 using IPABridge.Models;
 using IPABridge.ViewModels;
 
@@ -14,6 +16,7 @@ public partial class StoreView : UserControl
     public StoreView()
     {
         InitializeComponent();
+        DataObject.AddPastingHandler(TwoFactorCodeBox, TwoFactorCodeBox_OnPaste);
         DataContextChanged += OnDataContextChanged;
         Unloaded += (_, _) =>
         {
@@ -57,7 +60,8 @@ public partial class StoreView : UserControl
             return;
         }
 
-        // PasswordBox has no bindable Password property, so secrets stay in memory and are cleared from both layers together.
+        // PasswordBox has no bindable Password property, so the Apple password
+        // stays in memory and is cleared from both layers together.
         if (e.PropertyName == nameof(StoreViewModel.ApplePassword) &&
             string.IsNullOrEmpty(viewModel.ApplePassword) &&
             ApplePasswordBox.Password.Length > 0)
@@ -65,18 +69,40 @@ public partial class StoreView : UserControl
             ApplePasswordBox.Clear();
         }
 
-        if (e.PropertyName == nameof(StoreViewModel.TwoFactorCode) &&
-            string.IsNullOrEmpty(viewModel.TwoFactorCode) &&
-            TwoFactorCodeBox.Password.Length > 0)
+        if (e.PropertyName == nameof(StoreViewModel.RequiresTwoFactor))
         {
-            TwoFactorCodeBox.Clear();
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (!IsLoaded)
+                {
+                    return;
+                }
+
+                if (viewModel.RequiresTwoFactor)
+                {
+                    FocusTwoFactorVerificationInput();
+                }
+                else
+                {
+                    ApplePasswordBox.BringIntoView();
+                    ApplePasswordBox.Focus();
+                }
+            });
         }
 
-        if (e.PropertyName == nameof(StoreViewModel.VaultPassphrase) &&
-            string.IsNullOrEmpty(viewModel.VaultPassphrase) &&
-            VaultPassphraseBox.Password.Length > 0)
+        if (e.PropertyName == nameof(StoreViewModel.StatusMessage))
         {
-            VaultPassphraseBox.Clear();
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (!IsLoaded)
+                {
+                    return;
+                }
+
+                var peer = UIElementAutomationPeer.FromElement(StoreStatusText) ??
+                           UIElementAutomationPeer.CreatePeerForElement(StoreStatusText);
+                peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+            });
         }
 
         if (e.PropertyName == nameof(StoreViewModel.IsAddingAccount) && viewModel.IsAddingAccount)
@@ -104,12 +130,26 @@ public partial class StoreView : UserControl
         // The Add action replaces its own row. Focus either the prerequisite or the first credential field.
         Dispatcher.BeginInvoke(() =>
         {
+            if (!IsLoaded)
+            {
+                return;
+            }
+
             Control target = resolvedViewModel.Settings.IsIpatoolAvailable
                 ? AppleAccountEmailBox
                 : InstallIpatoolBeforeSignInButton;
             target.BringIntoView();
             target.Focus();
         });
+    }
+
+    internal void FocusTwoFactorVerificationInput()
+    {
+        TwoFactorCodeBox.Focus();
+        TwoFactorCodeBox.SelectAll();
+        // Keep the action row visible after keyboard focus requests the smallest
+        // possible code-box viewport at compact window heights.
+        TwoFactorVerificationPanel.BringIntoView();
     }
 
     private void ApplePasswordBox_OnPasswordChanged(object sender, RoutedEventArgs e)
@@ -120,20 +160,54 @@ public partial class StoreView : UserControl
         }
     }
 
-    private void TwoFactorCodeBox_OnPasswordChanged(object sender, RoutedEventArgs e)
+    private void TwoFactorCodeBox_OnPreviewTextInput(
+        object sender,
+        TextCompositionEventArgs eventArgs)
     {
-        if (DataContext is MainViewModel viewModel)
+        eventArgs.Handled = !IsAsciiDigits(eventArgs.Text) ||
+                            TwoFactorCodeBox.Text.Length -
+                            TwoFactorCodeBox.SelectionLength +
+                            eventArgs.Text.Length > 6;
+    }
+
+    private void TwoFactorCodeBox_OnPaste(object sender, DataObjectPastingEventArgs eventArgs)
+    {
+        if (!eventArgs.DataObject.GetDataPresent(DataFormats.UnicodeText) ||
+            eventArgs.DataObject.GetData(DataFormats.UnicodeText) is not string pastedText)
         {
-            viewModel.Store.TwoFactorCode = TwoFactorCodeBox.Password;
+            eventArgs.CancelCommand();
+            return;
+        }
+
+        var normalizedText = new string(pastedText
+            .Where(character => character is >= '0' and <= '9')
+            .ToArray());
+        var resultingLength = TwoFactorCodeBox.Text.Length -
+                              TwoFactorCodeBox.SelectionLength +
+                              normalizedText.Length;
+        if (normalizedText.Length == 0 || resultingLength > 6)
+        {
+            eventArgs.CancelCommand();
+            return;
+        }
+
+        if (!string.Equals(normalizedText, pastedText, StringComparison.Ordinal))
+        {
+            var selectionStart = TwoFactorCodeBox.SelectionStart;
+            var updatedText = TwoFactorCodeBox.Text
+                .Remove(selectionStart, TwoFactorCodeBox.SelectionLength)
+                .Insert(selectionStart, normalizedText);
+
+            eventArgs.CancelCommand();
+            TwoFactorCodeBox.SetCurrentValue(TextBox.TextProperty, updatedText);
+            TwoFactorCodeBox.CaretIndex = selectionStart + normalizedText.Length;
         }
     }
 
-    private void VaultPassphraseBox_OnPasswordChanged(object sender, RoutedEventArgs e)
+    private static bool IsAsciiDigits(string value)
     {
-        if (DataContext is MainViewModel viewModel)
-        {
-            viewModel.Store.VaultPassphrase = VaultPassphraseBox.Password;
-        }
+        return value.Length > 0 &&
+               value.All(character => character is >= '0' and <= '9');
     }
 
     private async void AppleAccountSelector_OnSelectionChanged(

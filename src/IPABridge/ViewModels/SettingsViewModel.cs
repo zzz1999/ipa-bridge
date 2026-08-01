@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using IPABridge.Infrastructure;
 using IPABridge.Models;
 using IPABridge.Services;
@@ -22,7 +23,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private bool _isInstallingIpatool;
     private string _ipatoolInstallationMessage =
         "You can also choose an existing ipatool.exe in Settings.";
-    private string _statusMessage = "Settings are stored locally and do not include your Apple Account password.";
+    private string _statusMessage =
+        "Settings and generated profile keys are encrypted locally. Apple passwords and verification codes are not saved.";
 
     public SettingsViewModel(
         ConfigurationService configurationService,
@@ -223,7 +225,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public async Task RefreshStatusAsync()
     {
         var version = await _ipatoolService.GetVersionAsync();
-        IpatoolStatus = version is null ? "Not installed" : $"Ready — {version}";
+        IpatoolStatus = BuildIpatoolStatus(version);
 
         var deviceTools = _toolLocationService.ResolveDeviceTools();
         DeviceToolsStatus = deviceTools.Backend switch
@@ -235,6 +237,26 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
         OnPropertyChanged(nameof(IsIpatoolAvailable));
         OnPropertyChanged(nameof(AreDeviceToolsAvailable));
+    }
+
+    internal static string BuildIpatoolStatus(string? installedVersion)
+    {
+        if (string.IsNullOrWhiteSpace(installedVersion))
+        {
+            return "Not installed";
+        }
+
+        var pinnedVersion = ToolBootstrapService
+            .GetPinnedIpatoolPackage(RuntimeInformation.ProcessArchitecture)
+            .Version
+            .TrimStart('v');
+        var normalizedInstalledVersion = installedVersion.Trim().TrimStart('v');
+        return string.Equals(
+            normalizedInstalledVersion,
+            pinnedVersion,
+            StringComparison.OrdinalIgnoreCase)
+            ? $"Ready — {normalizedInstalledVersion}"
+            : $"Update available — {normalizedInstalledVersion} → {pinnedVersion}";
     }
 
     public async Task ApplySelectedPathsAsync()

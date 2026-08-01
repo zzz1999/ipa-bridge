@@ -9,6 +9,55 @@ using IPABridge.Services;
 using IPABridge.ViewModels;
 
 var fakeIpatoolMode = Environment.GetEnvironmentVariable("IPA_BRIDGE_SMOKE_FAKE_IPATOOL");
+if (fakeIpatoolMode == "login-two-factor")
+{
+    Console.Write("enter password:");
+    var applePassword = Console.ReadLine();
+    if (applePassword != "temporary-apple-secret")
+    {
+        Console.WriteLine("{\"level\":\"error\",\"error\":\"wrong Apple password\",\"success\":false}");
+        return 7;
+    }
+
+    Console.Write("enter 2FA code:");
+    var twoFactorCode = Console.ReadLine();
+    if (twoFactorCode != "123456")
+    {
+        Console.WriteLine("{\"level\":\"error\",\"error\":\"wrong verification code\",\"success\":false}");
+        return 8;
+    }
+
+    Console.Write("enter passphrase to unlock");
+    var generatedVaultKey = Console.ReadLine();
+    try
+    {
+        if (generatedVaultKey is null ||
+            Convert.FromBase64String(generatedVaultKey).Length !=
+            LocalDataProtectionService.MasterKeySize)
+        {
+            throw new FormatException();
+        }
+    }
+    catch (FormatException)
+    {
+        Console.WriteLine("{\"level\":\"error\",\"error\":\"invalid generated vault key\",\"success\":false}");
+        return 9;
+    }
+
+    Console.WriteLine(
+        "{\"level\":\"info\",\"name\":\"Two Factor Account\",\"email\":\"twofactor@example.invalid\",\"success\":true}");
+    return 0;
+}
+if (fakeIpatoolMode == "login-duplicate")
+{
+    Console.Write("enter password:");
+    _ = Console.ReadLine();
+    Console.Write("enter passphrase to unlock");
+    _ = Console.ReadLine();
+    Console.WriteLine(
+        "{\"level\":\"info\",\"name\":\"Duplicate Account\",\"email\":\"duplicate@example.invalid\",\"success\":true}");
+    return 0;
+}
 if (fakeIpatoolMode == "login-wait")
 {
     Console.Write("enter password:");
@@ -159,6 +208,16 @@ async Task<bool> ThrowsAsync<TException>(Func<Task> action)
     {
         return true;
     }
+}
+
+string? ReadPrivateString(object instance, string fieldName)
+{
+    return instance.GetType()
+        .GetField(
+            fieldName,
+            System.Reflection.BindingFlags.Instance |
+            System.Reflection.BindingFlags.NonPublic)!
+        .GetValue(instance) as string;
 }
 
 var commandFailure = new InvalidOperationException("expected command failure");
@@ -332,24 +391,31 @@ Check(
     "unresolved version preserves the download identifier");
 
 var pinnedAmd64Ipatool = ToolBootstrapService.GetPinnedIpatoolPackage(Architecture.X64);
-Check(pinnedAmd64Ipatool.Version == "v2.3.0", "ipatool bootstrap version is pinned");
+Check(pinnedAmd64Ipatool.Version == "v2.3.1", "ipatool bootstrap version is pinned");
 Check(
-    pinnedAmd64Ipatool.ArchiveName == "ipatool-2.3.0-windows-amd64.tar.gz",
+    pinnedAmd64Ipatool.ArchiveName == "ipatool-2.3.1-windows-amd64.tar.gz",
     "ipatool AMD64 archive name is pinned");
 Check(
     pinnedAmd64Ipatool.Sha256 ==
-    "eaf208f0fee964a82f14f8eda60c4b0568fe555ad97729bb74277d3d7c0e4d54",
+    "8e986ed9320f205bcd1fd24640ec46a5b92ff346425aff28d1103e57d2fdcadb",
     "ipatool AMD64 checksum is pinned");
 var pinnedArm64Ipatool = ToolBootstrapService.GetPinnedIpatoolPackage(Architecture.Arm64);
 Check(
     pinnedArm64Ipatool.DownloadUrl.EndsWith(
-        "/v2.3.0/ipatool-2.3.0-windows-arm64.tar.gz",
+        "/v2.3.1/ipatool-2.3.1-windows-arm64.tar.gz",
         StringComparison.Ordinal),
     "ipatool ARM64 download remains on the reviewed release");
 Check(
     pinnedArm64Ipatool.Sha256 ==
-    "690d94332802f5fca604cce29ac9762089c7271c30a68e64eeb462c605e1fa07",
+    "661ffbee49d25f46c463a2b38cd05b08048a4c939a194825b9e3316ad0867da9",
     "ipatool ARM64 checksum is pinned");
+Check(
+    SettingsViewModel.BuildIpatoolStatus("2.3.0") ==
+    "Update available — 2.3.0 → 2.3.1",
+    "an installed older ipatool version is labeled separately from the reviewed update");
+Check(
+    SettingsViewModel.BuildIpatoolStatus("v2.3.1") == "Ready — 2.3.1",
+    "the reviewed ipatool version is labeled ready");
 Check(
     Throws<PlatformNotSupportedException>(() =>
         ToolBootstrapService.GetPinnedIpatoolPackage(Architecture.X86)),
@@ -441,6 +507,87 @@ Check(
 Check(
     failedBackendAppleSupport.TransportEndpointLabel == "Endpoint reachable — Diagnostic only",
     "TCP endpoint reachability is labeled as diagnostic only");
+var rawIdevicePanic =
+    "thread 'main' panicked at tools\\src\\idevice_id.rs:12:40:\r\n" +
+    "called Result::unwrap() on an Err value: Socket(Os { code: 10061, kind: ConnectionRefused, message: \"No connection could be made because the target machine actively refused it.\" })\r\n" +
+    "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace";
+var classifiedProbeFailure = SystemPrerequisiteService.ExtractProbeFailure(rawIdevicePanic);
+Check(
+    classifiedProbeFailure == "Apple device transport is not running." &&
+    !classifiedProbeFailure.Contains("RUST_BACKTRACE", StringComparison.Ordinal) &&
+    !classifiedProbeFailure.Contains("idevice_id.rs", StringComparison.Ordinal),
+    "idevice socket failures are classified without exposing Rust panic boilerplate");
+
+var remediationToolsRoot = Path.Combine(
+    Path.GetTempPath(),
+    $"ipa-bridge-device-remediation-smoke-{Guid.NewGuid():N}");
+Directory.CreateDirectory(remediationToolsRoot);
+try
+{
+    File.WriteAllBytes(Path.Combine(remediationToolsRoot, "idevice-tools.exe"), []);
+    File.WriteAllBytes(Path.Combine(remediationToolsRoot, "idevice_id.exe"), []);
+    var remediationConfiguration = new ConfigurationService();
+    remediationConfiguration.Current.DeviceToolsDirectory = remediationToolsRoot;
+    var remediationToolLocation = new ToolLocationService(remediationConfiguration);
+    var remediationDeviceService = new DeviceService(
+        remediationToolLocation,
+        new ProcessRunner());
+    using var remediationViewModel = new DevicesViewModel(
+        remediationConfiguration,
+        remediationDeviceService,
+        new SystemPrerequisiteService(new ProcessRunner(), remediationToolLocation),
+        new DeviceEnvironmentOperationGate(),
+        (_, _, _) => { });
+    var supportProperty = typeof(DevicesViewModel).GetProperty(
+        nameof(DevicesViewModel.AppleDeviceSupport));
+
+    supportProperty!.SetValue(remediationViewModel, new AppleDeviceSupportStatus
+    {
+        HasBeenChecked = true,
+        IsAppleDevicesInstalled = false,
+        IsUsbDriverInstalled = true,
+        IsTransportEndpointReachable = false,
+        IsTransportServiceRegistered = false,
+        IsBackendProbeSuccessful = false,
+        BackendName = "idevice-tools",
+        BackendProbeError = classifiedProbeFailure
+    });
+    Check(
+        remediationViewModel.NeedsAppleDevicesInstallation &&
+        !remediationViewModel.NeedsAppleDevicesLaunch &&
+        !remediationViewModel.NeedsDeviceToolsRepair &&
+        remediationViewModel.AppleDeviceSupportDetail.Contains(
+            "Install Apple Devices from Microsoft Store",
+            StringComparison.Ordinal),
+        "driver-only state offers the official Microsoft Store installation");
+
+    supportProperty.SetValue(remediationViewModel, remediationViewModel.AppleDeviceSupport with
+    {
+        IsAppleDevicesInstalled = true
+    });
+    Check(
+        !remediationViewModel.NeedsAppleDevicesInstallation &&
+        remediationViewModel.NeedsAppleDevicesLaunch &&
+        !remediationViewModel.NeedsDeviceToolsRepair,
+        "installed Apple Devices with a stopped transport asks the user to open the app instead of reinstalling it");
+
+    supportProperty.SetValue(remediationViewModel, remediationViewModel.AppleDeviceSupport with
+    {
+        IsTransportEndpointReachable = true
+    });
+    Check(
+        !remediationViewModel.NeedsAppleDevicesInstallation &&
+        !remediationViewModel.NeedsAppleDevicesLaunch &&
+        remediationViewModel.NeedsDeviceToolsRepair &&
+        remediationViewModel.AppleDeviceSupportDetail.Contains(
+            "Reinstall the verified device tools",
+            StringComparison.Ordinal),
+        "reachable Apple transport with a failed protocol probe offers only verified GitHub device-tool repair");
+}
+finally
+{
+    Directory.Delete(remediationToolsRoot, recursive: true);
+}
 
 var appleDevicesArguments = SystemPrerequisiteService.BuildAppleDevicesWingetInstallArguments();
 Check(
@@ -703,6 +850,14 @@ try
     const string secondAccountId = "22222222222222222222222222222222";
     const string toolCanary = "SECRET_TOOL_PATH_CANARY";
     const string deviceToolCanary = "SECRET_DEVICE_PATH_CANARY";
+    var firstVaultKeyCanary = Convert.ToBase64String(
+        Enumerable.Range(1, LocalDataProtectionService.MasterKeySize)
+            .Select(value => (byte)value)
+            .ToArray());
+    var secondVaultKeyCanary = Convert.ToBase64String(
+        Enumerable.Range(33, LocalDataProtectionService.MasterKeySize)
+            .Select(value => (byte)value)
+            .ToArray());
     encryptedConfiguration.Current.IpatoolPath = Path.Combine(
         encryptedConfigurationRoot,
         toolCanary,
@@ -713,8 +868,18 @@ try
     encryptedConfiguration.Current.DownloadDirectory = downloadPath;
     encryptedConfiguration.Current.AppleAccounts =
     [
-        new AppleAccountProfile { Id = firstAccountId, Email = emailCanary },
-        new AppleAccountProfile { Id = secondAccountId, Email = secondEmailCanary }
+        new AppleAccountProfile
+        {
+            Id = firstAccountId,
+            Email = emailCanary,
+            LocalVaultKey = firstVaultKeyCanary
+        },
+        new AppleAccountProfile
+        {
+            Id = secondAccountId,
+            Email = secondEmailCanary,
+            LocalVaultKey = secondVaultKeyCanary
+        }
     ];
     encryptedConfiguration.Current.SelectedAppleAccountId = secondAccountId;
     encryptedConfiguration.Current.AutomaticallyRefreshDevices = false;
@@ -749,8 +914,10 @@ try
         reopened.AppleAccounts.Count == 2 &&
         reopened.AppleAccounts[0].Id == firstAccountId &&
         reopened.AppleAccounts[0].Email == emailCanary &&
+        reopened.AppleAccounts[0].LocalVaultKey == firstVaultKeyCanary &&
         reopened.AppleAccounts[1].Id == secondAccountId &&
         reopened.AppleAccounts[1].Email == secondEmailCanary &&
+        reopened.AppleAccounts[1].LocalVaultKey == secondVaultKeyCanary &&
         reopened.SelectedAppleAccountId == secondAccountId &&
         !reopened.AutomaticallyRefreshDevices,
         "encrypted settings round-trip every configuration property");
@@ -901,7 +1068,15 @@ try
         "a settings migration conflict blocks later saves");
     File.Delete(legacyConfigurationPath);
 
-    var canaries = new[] { emailCanary, secondEmailCanary, toolCanary, deviceToolCanary };
+    var canaries = new[]
+    {
+        emailCanary,
+        secondEmailCanary,
+        toolCanary,
+        deviceToolCanary,
+        firstVaultKeyCanary,
+        secondVaultKeyCanary
+    };
     var plaintextCanaryFound = Directory
         .EnumerateFiles(encryptedConfigurationRoot, "*", SearchOption.AllDirectories)
         .Select(File.ReadAllBytes)
@@ -932,8 +1107,9 @@ try
                 property.Contains(term, StringComparison.OrdinalIgnoreCase)))
         .ToArray();
     Check(
-        secretConfigurationProperties.Length == 0,
-        "passwords, verification codes, and vault passphrases remain non-persistent");
+        secretConfigurationProperties.Length == 0 &&
+        typeof(AppleAccountProfile).GetProperty(nameof(AppleAccountProfile.LocalVaultKey)) is not null,
+        "Apple passwords and verification codes remain non-persistent while generated local vault keys use encrypted settings");
 }
 finally
 {
@@ -976,6 +1152,7 @@ try
         migratedConfiguration.AppleAccountEmail is null &&
         migratedConfiguration.AppleAccounts.Count == 1 &&
         migratedConfiguration.AppleAccounts[0].Email == legacyEmail &&
+        migratedConfiguration.AppleAccounts[0].LocalVaultKey.Length == 0 &&
         migratedConfiguration.SelectedAppleAccountId == migratedConfiguration.AppleAccounts[0].Id &&
         migratedConfiguration.IpatoolPath == legacyConfiguration.IpatoolPath &&
         !migratedConfiguration.AutomaticallyRefreshDevices,
@@ -1001,6 +1178,7 @@ try
     Check(
         migratedReopened.AppleAccounts.Count == 1 &&
         migratedReopened.AppleAccounts[0].Email == legacyEmail &&
+        migratedReopened.AppleAccounts[0].LocalVaultKey.Length == 0 &&
         migratedReopened.AppleAccounts[0].Id == migratedConfiguration.AppleAccounts[0].Id &&
         migratedReopened.SelectedAppleAccountId == migratedConfiguration.SelectedAppleAccountId,
         "migrated encrypted settings reopen with a stable account profile ID");
@@ -1033,6 +1211,7 @@ try
         randomByteGenerator);
     var legacyPlaintext = JsonSerializer.SerializeToUtf8Bytes(new
     {
+        SchemaVersion = 2,
         IpatoolPath = string.Empty,
         DeviceToolsDirectory = string.Empty,
         DownloadDirectory = downloadPath,
@@ -1062,10 +1241,12 @@ try
     var encryptedLegacyMigrated = await encryptedLegacyService.LoadAsync();
     var migratedAccountId = encryptedLegacyMigrated.AppleAccounts.Single().Id;
     Check(
+        encryptedLegacyMigrated.SchemaVersion == AppConfiguration.CurrentSchemaVersion &&
         encryptedLegacyMigrated.AppleAccounts.Single().Email == encryptedLegacyEmail &&
+        encryptedLegacyMigrated.AppleAccounts.Single().LocalVaultKey.Length == 0 &&
         encryptedLegacyMigrated.SelectedAppleAccountId == migratedAccountId &&
         encryptedLegacyMigrated.AppleAccountEmail is null,
-        "legacy encrypted single-account settings migrate to one selected profile");
+        "schema-2 encrypted single-account settings migrate to a keyless profile that requires an explicit local-session reset");
 
     var encryptedLegacyReopen = new ConfigurationService(
         secureConfigurationPath,
@@ -1132,6 +1313,22 @@ try
         "account profiles trim emails, deduplicate case-insensitively, and repair selection");
 
     var validNormalizedSettings = File.ReadAllBytes(secureConfigurationPath);
+    normalizationService.Current.AppleAccounts =
+    [
+        new AppleAccountProfile
+        {
+            Id = retainedAccountId,
+            Email = "first.account@example.invalid",
+            LocalVaultKey = "not-base64"
+        }
+    ];
+    Check(
+        await ThrowsAsync<InvalidDataException>(() => normalizationService.SaveAsync()),
+        "malformed generated local vault keys are rejected before encrypted settings are written");
+    Check(
+        File.ReadAllBytes(secureConfigurationPath).AsSpan().SequenceEqual(validNormalizedSettings),
+        "rejected local vault keys do not overwrite encrypted settings");
+
     normalizationService.Current.AppleAccounts =
     [
         new AppleAccountProfile
@@ -1362,7 +1559,6 @@ else
             "starting the first account hides the empty selector and opens the credential form");
         cancelableStore.Email = "cancel@example.invalid";
         cancelableStore.ApplePassword = "temporary-apple-secret";
-        cancelableStore.VaultPassphrase = "temporary-vault-secret";
         Check(
             cancelableStore.LoginCommand.CanExecute(null),
             "complete Apple Account credentials enable sign-in when ipatool is available");
@@ -1402,6 +1598,408 @@ else
             cancelableStore.IsEmptyAccountPromptVisible &&
             !cancelableStore.IsAccountFormVisible,
             "pending-session cleanup succeeds on retry after the file lock is released");
+
+        var twoFactorConfigurationRoot = Path.Combine(
+            Path.GetTempPath(),
+            $"ipa-bridge-two-factor-smoke-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(twoFactorConfigurationRoot);
+        try
+        {
+            var twoFactorConfigurationPath = Path.Combine(
+                twoFactorConfigurationRoot,
+                "settings.secure.json");
+            var twoFactorLegacyPath = Path.Combine(
+                twoFactorConfigurationRoot,
+                "settings.json");
+            var twoFactorKeyPath = Path.Combine(
+                twoFactorConfigurationRoot,
+                "master-key.v1");
+            var twoFactorDownloadPath = Path.Combine(
+                twoFactorConfigurationRoot,
+                "Downloads");
+            var twoFactorSessions = Path.Combine(
+                temporaryAccountSessions,
+                "two-factor");
+            var twoFactorConfiguration = new ConfigurationService(
+                twoFactorConfigurationPath,
+                twoFactorLegacyPath,
+                twoFactorKeyPath,
+                twoFactorDownloadPath,
+                new SmokeKeyProtector(),
+                new SmokeRandomByteGenerator());
+            await twoFactorConfiguration.LoadAsync();
+            twoFactorConfiguration.Current.IpatoolPath = executable;
+            var twoFactorIpatool = new IpatoolService(
+                new ToolLocationService(twoFactorConfiguration),
+                new ProcessRunner(),
+                new ConPtyProcessRunner(),
+                twoFactorSessions);
+            var twoFactorStore = new StoreViewModel(
+                twoFactorConfiguration,
+                twoFactorIpatool,
+                (_, _, _) => { });
+            twoFactorStore.LoadConfiguration();
+            twoFactorStore.AddAccountCommand.Execute(null);
+            twoFactorStore.Email = "twofactor@example.invalid";
+            twoFactorStore.ApplePassword = "temporary-apple-secret";
+            Environment.SetEnvironmentVariable(
+                "IPA_BRIDGE_SMOKE_FAKE_IPATOOL",
+                "login-two-factor");
+
+            Check(
+                twoFactorStore.LoginCommand.CanExecute(null),
+                "Apple Account sign-in starts without a user-entered local vault passphrase");
+            await twoFactorStore.LoginCommand.ExecuteAsync();
+            var transientVaultKey = typeof(StoreViewModel)
+                .GetField(
+                    "_transientLocalVaultKey",
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(twoFactorStore) as string;
+            Check(
+                twoFactorStore.RequiresTwoFactor &&
+                twoFactorStore.ApplePassword == "temporary-apple-secret" &&
+                twoFactorStore.Accounts.Count == 0 &&
+                twoFactorConfiguration.Current.AppleAccounts.Count == 0 &&
+                !string.IsNullOrWhiteSpace(transientVaultKey) &&
+                Convert.FromBase64String(transientVaultKey).Length ==
+                LocalDataProtectionService.MasterKeySize,
+                "the first sign-in keeps the Apple password and one generated 256-bit vault key only in memory while awaiting two-factor verification");
+
+            twoFactorStore.CancelTwoFactorCommand.Execute(null);
+            Check(
+                !twoFactorStore.RequiresTwoFactor &&
+                twoFactorStore.ApplePassword.Length == 0 &&
+                twoFactorStore.TwoFactorCode.Length == 0 &&
+                twoFactorStore.Accounts.Count == 0 &&
+                (!Directory.Exists(twoFactorSessions) ||
+                 !Directory.EnumerateDirectories(twoFactorSessions).Any()),
+                "canceling verification clears Apple secrets and removes the uncommitted local account session");
+
+            twoFactorStore.ApplePassword = "temporary-apple-secret";
+            await twoFactorStore.LoginCommand.ExecuteAsync();
+            var regeneratedVaultKey = typeof(StoreViewModel)
+                .GetField(
+                    "_transientLocalVaultKey",
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(twoFactorStore) as string;
+            Check(
+                twoFactorStore.RequiresTwoFactor &&
+                !string.IsNullOrWhiteSpace(regeneratedVaultKey) &&
+                regeneratedVaultKey != transientVaultKey,
+                "restarting a canceled sign-in creates a new independent vault key");
+            transientVaultKey = regeneratedVaultKey;
+
+            twoFactorStore.TwoFactorCode = "12a";
+            Check(
+                twoFactorStore.TwoFactorCode == "12" &&
+                !twoFactorStore.LoginCommand.CanExecute(null),
+                "verification input removes non-digits and requires exactly six digits");
+            twoFactorStore.TwoFactorCode = "1234567";
+            Check(
+                twoFactorStore.TwoFactorCode == "123456" &&
+                twoFactorStore.LoginCommand.CanExecute(null),
+                "verification input is limited to six ASCII digits");
+            twoFactorStore.TwoFactorCode = "654321";
+            await twoFactorStore.LoginCommand.ExecuteAsync();
+            Check(
+                twoFactorStore.RequiresTwoFactor &&
+                twoFactorStore.ApplePassword == "temporary-apple-secret" &&
+                twoFactorStore.TwoFactorCode.Length == 0 &&
+                twoFactorStore.Accounts.Count == 0,
+                "a rejected verification code keeps the challenge open and clears only the code");
+
+            twoFactorStore.TwoFactorCode = "123456";
+            await twoFactorStore.LoginCommand.ExecuteAsync();
+
+            var savedTwoFactorAccount = twoFactorStore.Accounts.Single();
+            Check(
+                !twoFactorStore.RequiresTwoFactor &&
+                twoFactorStore.ApplePassword.Length == 0 &&
+                twoFactorStore.TwoFactorCode.Length == 0 &&
+                savedTwoFactorAccount.Email == "twofactor@example.invalid" &&
+                savedTwoFactorAccount.LocalVaultKey == transientVaultKey &&
+                Convert.FromBase64String(savedTwoFactorAccount.LocalVaultKey).Length ==
+                LocalDataProtectionService.MasterKeySize,
+                "successful verification saves the generated vault key and clears transient Apple secrets");
+            Check(
+                File.Exists(twoFactorConfigurationPath) &&
+                !Encoding.UTF8.GetString(File.ReadAllBytes(twoFactorConfigurationPath))
+                    .Contains(savedTwoFactorAccount.LocalVaultKey, StringComparison.Ordinal),
+                "the generated per-account vault key is persisted only inside encrypted settings");
+
+            var reopenedTwoFactorConfiguration = new ConfigurationService(
+                twoFactorConfigurationPath,
+                twoFactorLegacyPath,
+                twoFactorKeyPath,
+                twoFactorDownloadPath,
+                new SmokeKeyProtector(),
+                new SmokeRandomByteGenerator());
+            Check(
+                (await reopenedTwoFactorConfiguration.LoadAsync())
+                    .AppleAccounts.Single().LocalVaultKey == transientVaultKey,
+                "the encrypted generated vault key is available after restart without another user prompt");
+        }
+        finally
+        {
+            Directory.Delete(twoFactorConfigurationRoot, recursive: true);
+        }
+
+        var legacyCleanupRoot = Path.Combine(
+            Path.GetTempPath(),
+            $"ipa-bridge-legacy-cleanup-smoke-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(legacyCleanupRoot);
+        try
+        {
+            var configurationPath = Path.Combine(legacyCleanupRoot, "settings.secure.json");
+            var legacyPath = Path.Combine(legacyCleanupRoot, "settings.json");
+            var keyPath = Path.Combine(legacyCleanupRoot, "master-key.v1");
+            var downloadPath = Path.Combine(legacyCleanupRoot, "Downloads");
+            var sessionsPath = Path.Combine(legacyCleanupRoot, "Accounts");
+            const string legacyAccountId = "66666666666666666666666666666666";
+            const string otherAccountId = "77777777777777777777777777777777";
+            var otherVaultKey = Convert.ToBase64String(
+                Enumerable.Range(65, LocalDataProtectionService.MasterKeySize)
+                    .Select(value => (byte)value)
+                    .ToArray());
+            var configuration = new ConfigurationService(
+                configurationPath,
+                legacyPath,
+                keyPath,
+                downloadPath,
+                new SmokeKeyProtector(),
+                new SmokeRandomByteGenerator());
+            await configuration.LoadAsync();
+            configuration.Current.IpatoolPath = executable;
+            configuration.Current.AppleAccounts =
+            [
+                new AppleAccountProfile
+                {
+                    Id = legacyAccountId,
+                    Email = "legacy-cleanup@example.invalid"
+                },
+                new AppleAccountProfile
+                {
+                    Id = otherAccountId,
+                    Email = "other-cleanup@example.invalid",
+                    LocalVaultKey = otherVaultKey
+                }
+            ];
+            configuration.Current.SelectedAppleAccountId = legacyAccountId;
+            await configuration.SaveAsync();
+            var ipatool = new IpatoolService(
+                new ToolLocationService(configuration),
+                new ProcessRunner(),
+                new ConPtyProcessRunner(),
+                sessionsPath);
+            var store = new StoreViewModel(configuration, ipatool, (_, _, _) => { });
+            store.LoadConfiguration();
+            store.ApplePassword = "temporary-apple-secret";
+            Environment.SetEnvironmentVariable(
+                "IPA_BRIDGE_SMOKE_FAKE_IPATOOL",
+                "login-two-factor");
+            await store.LoginCommand.ExecuteAsync();
+
+            var legacySessionDirectory = Path.Combine(sessionsPath, legacyAccountId);
+            var lockedSessionFile = Path.Combine(legacySessionDirectory, "locked-cookie.jar");
+            await using (var sessionLock = new FileStream(
+                             lockedSessionFile,
+                             FileMode.Create,
+                             FileAccess.ReadWrite,
+                             FileShare.None))
+            {
+                store.LeaveStore();
+                Check(
+                    Directory.Exists(legacySessionDirectory) &&
+                    ReadPrivateString(store, "_transientLocalVaultAccountId") == legacyAccountId &&
+                    ReadPrivateString(store, "_transientLocalVaultKey")!.Length == 0 &&
+                    store.ApplePassword.Length == 0 &&
+                    store.TwoFactorCode.Length == 0,
+                    "leaving a locked legacy reset clears Apple secrets but retains the local-session cleanup handle");
+            }
+
+            var otherAccount = store.Accounts.Single(account => account.Id == otherAccountId);
+            await store.SelectAccountAsync(otherAccount);
+            Check(
+                ReferenceEquals(store.SelectedAccount, otherAccount) &&
+                !Directory.Exists(legacySessionDirectory) &&
+                ReadPrivateString(store, "_transientLocalVaultAccountId") is null,
+                "account switching retries legacy temporary-session cleanup before changing profiles");
+        }
+        finally
+        {
+            Directory.Delete(legacyCleanupRoot, recursive: true);
+        }
+
+        var duplicateReconnectRoot = Path.Combine(
+            Path.GetTempPath(),
+            $"ipa-bridge-duplicate-reconnect-smoke-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(duplicateReconnectRoot);
+        try
+        {
+            var configurationPath = Path.Combine(duplicateReconnectRoot, "settings.secure.json");
+            var legacyPath = Path.Combine(duplicateReconnectRoot, "settings.json");
+            var keyPath = Path.Combine(duplicateReconnectRoot, "master-key.v1");
+            var downloadPath = Path.Combine(duplicateReconnectRoot, "Downloads");
+            var sessionsPath = Path.Combine(duplicateReconnectRoot, "Accounts");
+            const string selectedAccountId = "88888888888888888888888888888888";
+            const string duplicateAccountId = "99999999999999999999999999999999";
+            var selectedVaultKey = Convert.ToBase64String(
+                RandomNumberGenerator.GetBytes(LocalDataProtectionService.MasterKeySize));
+            var duplicateVaultKey = Convert.ToBase64String(
+                RandomNumberGenerator.GetBytes(LocalDataProtectionService.MasterKeySize));
+            var configuration = new ConfigurationService(
+                configurationPath,
+                legacyPath,
+                keyPath,
+                downloadPath,
+                new SmokeKeyProtector(),
+                new SmokeRandomByteGenerator());
+            await configuration.LoadAsync();
+            configuration.Current.IpatoolPath = executable;
+            configuration.Current.AppleAccounts =
+            [
+                new AppleAccountProfile
+                {
+                    Id = selectedAccountId,
+                    Email = "selected@example.invalid",
+                    LocalVaultKey = selectedVaultKey
+                },
+                new AppleAccountProfile
+                {
+                    Id = duplicateAccountId,
+                    Email = "duplicate@example.invalid",
+                    LocalVaultKey = duplicateVaultKey
+                }
+            ];
+            configuration.Current.SelectedAppleAccountId = selectedAccountId;
+            await configuration.SaveAsync();
+            var selectedSessionDirectory = Path.Combine(sessionsPath, selectedAccountId);
+            Directory.CreateDirectory(selectedSessionDirectory);
+            await File.WriteAllTextAsync(
+                Path.Combine(selectedSessionDirectory, "previous-session.marker"),
+                "previous session");
+            var store = new StoreViewModel(
+                configuration,
+                new IpatoolService(
+                    new ToolLocationService(configuration),
+                    new ProcessRunner(),
+                    new ConPtyProcessRunner(),
+                    sessionsPath),
+                (_, _, _) => { });
+            store.LoadConfiguration();
+            store.ApplePassword = "temporary-apple-secret";
+            Environment.SetEnvironmentVariable(
+                "IPA_BRIDGE_SMOKE_FAKE_IPATOOL",
+                "login-duplicate");
+            await store.LoginCommand.ExecuteAsync();
+
+            var selectedAccountAfterDuplicate = store.SelectedAccount;
+            Check(
+                store.Accounts.Count == 2 &&
+                selectedAccountAfterDuplicate is not null &&
+                selectedAccountAfterDuplicate.Id == selectedAccountId &&
+                selectedAccountAfterDuplicate.Email == "selected@example.invalid" &&
+                selectedAccountAfterDuplicate.LocalVaultKey == selectedVaultKey &&
+                !Directory.Exists(selectedSessionDirectory) &&
+                store.StatusMessage.Contains(
+                    "already belongs to another local account profile",
+                    StringComparison.Ordinal),
+                "a duplicate identity returned during reconnect removes the overwritten selected-profile session");
+        }
+        finally
+        {
+            Directory.Delete(duplicateReconnectRoot, recursive: true);
+        }
+
+        var removalRollbackRoot = Path.Combine(
+            Path.GetTempPath(),
+            $"ipa-bridge-removal-rollback-smoke-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(removalRollbackRoot);
+        try
+        {
+            var configurationPath = Path.Combine(removalRollbackRoot, "settings.secure.json");
+            var legacyPath = Path.Combine(removalRollbackRoot, "settings.json");
+            var keyPath = Path.Combine(removalRollbackRoot, "master-key.v1");
+            var downloadPath = Path.Combine(removalRollbackRoot, "Downloads");
+            var sessionsPath = Path.Combine(removalRollbackRoot, "Accounts");
+            const string removableAccountId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+            var removableVaultKey = Convert.ToBase64String(
+                RandomNumberGenerator.GetBytes(LocalDataProtectionService.MasterKeySize));
+            var configuration = new ConfigurationService(
+                configurationPath,
+                legacyPath,
+                keyPath,
+                downloadPath,
+                new SmokeKeyProtector(),
+                new SmokeRandomByteGenerator());
+            await configuration.LoadAsync();
+            configuration.Current.IpatoolPath = executable;
+            configuration.Current.AppleAccounts =
+            [
+                new AppleAccountProfile
+                {
+                    Id = removableAccountId,
+                    Email = "removal-rollback@example.invalid",
+                    LocalVaultKey = removableVaultKey
+                }
+            ];
+            configuration.Current.SelectedAppleAccountId = removableAccountId;
+            await configuration.SaveAsync();
+            var sessionDirectory = Path.Combine(sessionsPath, removableAccountId);
+            Directory.CreateDirectory(sessionDirectory);
+            await File.WriteAllTextAsync(
+                Path.Combine(sessionDirectory, "session.marker"),
+                "restorable session");
+            var store = new StoreViewModel(
+                configuration,
+                new IpatoolService(
+                    new ToolLocationService(configuration),
+                    new ProcessRunner(),
+                    new ConPtyProcessRunner(),
+                    sessionsPath),
+                (_, _, _) => { });
+            store.LoadConfiguration();
+            store.RequestRemoveAccountCommand.Execute(null);
+            await using (var configurationLock = new FileStream(
+                             configurationPath,
+                             FileMode.Open,
+                             FileAccess.Read,
+                             FileShare.Read))
+            {
+                await store.ConfirmRemoveAccountCommand.ExecuteAsync();
+                var selectedAccountAfterRollback = store.SelectedAccount;
+                Check(
+                    store.Accounts.Count == 1 &&
+                    selectedAccountAfterRollback is not null &&
+                    selectedAccountAfterRollback.Id == removableAccountId &&
+                    selectedAccountAfterRollback.LocalVaultKey == removableVaultKey &&
+                    Directory.Exists(sessionDirectory) &&
+                    File.Exists(Path.Combine(sessionDirectory, "session.marker")),
+                    "a profile-save failure restores both the account key and its staged local session");
+            }
+
+            var reopenedConfiguration = new ConfigurationService(
+                configurationPath,
+                legacyPath,
+                keyPath,
+                downloadPath,
+                new SmokeKeyProtector(),
+                new SmokeRandomByteGenerator());
+            var reopenedAccount = (await reopenedConfiguration.LoadAsync())
+                .AppleAccounts
+                .Single();
+            Check(
+                reopenedAccount.Id == removableAccountId &&
+                reopenedAccount.LocalVaultKey == removableVaultKey &&
+                !Directory.Exists(Path.Combine(sessionsPath, ".pending-session-removals")),
+                "failed profile removal leaves the persisted profile authoritative and no quarantined residue");
+        }
+        finally
+        {
+            Directory.Delete(removalRollbackRoot, recursive: true);
+        }
 
         var fakeApp = new StoreApp
         {
@@ -1465,7 +2063,7 @@ else
         Check(
             fakeSearchResults.Count == 1 &&
             fakeSearchResults[0].BundleIdentifier == "com.example.bridge",
-            "search uses the pinned v2.3.0 flags inside the selected account environment");
+            "search uses the pinned v2.3.1 flags inside the selected account environment");
 
         var mismatchedAccount = new AppleAccountProfile
         {
@@ -1572,7 +2170,7 @@ else
                 cancellationToken: offlineContractTimeout.Token);
             Check(
                 versionResult.IsSuccess &&
-                versionResult.CombinedOutput.Contains("ipatool version 2.3.0", StringComparison.Ordinal),
+                versionResult.CombinedOutput.Contains("ipatool version 2.3.1", StringComparison.Ordinal),
                 "official ipatool binary matches the pinned version");
 
             var helpResult = await processRunner.RunAsync(
@@ -1592,7 +2190,7 @@ else
             Check(
                 searchHelpResult.IsSuccess &&
                 searchHelpResult.CombinedOutput.Contains("--limit", StringComparison.Ordinal) &&
-                !searchHelpResult.CombinedOutput.Contains("--platform", StringComparison.Ordinal),
+                searchHelpResult.CombinedOutput.Contains("--platform", StringComparison.Ordinal),
                 "pinned ipatool search flags match IPA Bridge arguments");
 
             var downloadHelpResult = await processRunner.RunAsync(
@@ -1602,7 +2200,7 @@ else
             Check(
                 downloadHelpResult.IsSuccess &&
                 downloadHelpResult.CombinedOutput.Contains("--purchase", StringComparison.Ordinal) &&
-                !downloadHelpResult.CombinedOutput.Contains("--platform", StringComparison.Ordinal),
+                downloadHelpResult.CombinedOutput.Contains("--platform", StringComparison.Ordinal),
                 "pinned ipatool download flags match IPA Bridge arguments");
 
             var jsonErrorResult = await processRunner.RunAsync(

@@ -6,9 +6,15 @@ using IPABridge.Models;
 
 namespace IPABridge.Services;
 
+internal sealed record StagedLocalAccountSessionRemoval(
+    string AccountId,
+    string OriginalDirectory,
+    string StagedDirectory);
+
 public sealed partial class IpatoolService
 {
     private const int VersionMetadataConcurrency = 2;
+    private const string SessionRemovalStagingDirectoryName = ".pending-session-removals";
     private readonly ToolLocationService _toolLocationService;
     private readonly ProcessRunner _processRunner;
     private readonly ConPtyProcessRunner _conPtyProcessRunner;
@@ -49,6 +55,131 @@ public sealed partial class IpatoolService
         }
 
         InvalidateAccountCache(account);
+    }
+
+    internal StagedLocalAccountSessionRemoval? StageLocalAccountSessionRemoval(
+        AppleAccountProfile account)
+    {
+        var accountDirectory = GetAccountHomeDirectory(account.Id);
+        if (!Directory.Exists(accountDirectory))
+        {
+            InvalidateAccountCache(account);
+            return null;
+        }
+
+        var stagingRoot = GetSessionRemovalStagingRoot();
+        Directory.CreateDirectory(stagingRoot);
+        var operationId = Guid.NewGuid().ToString("N");
+        var stagedDirectory = Path.Combine(stagingRoot, $"{account.Id}.{operationId}");
+        Directory.Move(accountDirectory, stagedDirectory);
+        InvalidateAccountCache(account);
+        return new StagedLocalAccountSessionRemoval(
+            account.Id,
+            accountDirectory,
+            stagedDirectory);
+    }
+
+    internal void CommitLocalAccountSessionRemoval(
+        StagedLocalAccountSessionRemoval? removal)
+    {
+        if (removal is null)
+        {
+            return;
+        }
+
+        ValidateStagedLocalAccountSessionRemoval(removal);
+        if (Directory.Exists(removal.StagedDirectory))
+        {
+            Directory.Delete(removal.StagedDirectory, recursive: true);
+        }
+
+        TryDeleteEmptySessionRemovalStagingRoot();
+    }
+
+    internal void RollbackLocalAccountSessionRemoval(
+        StagedLocalAccountSessionRemoval? removal)
+    {
+        if (removal is null)
+        {
+            return;
+        }
+
+        ValidateStagedLocalAccountSessionRemoval(removal);
+        if (!Directory.Exists(removal.StagedDirectory))
+        {
+            throw new DirectoryNotFoundException(
+                "The staged Apple Account session is no longer available for rollback.");
+        }
+
+        if (Directory.Exists(removal.OriginalDirectory))
+        {
+            throw new IOException(
+                "The Apple Account session rollback target already exists.");
+        }
+
+        Directory.Move(removal.StagedDirectory, removal.OriginalDirectory);
+        TryDeleteEmptySessionRemovalStagingRoot();
+    }
+
+    internal IReadOnlyList<string> RecoverStagedLocalAccountSessionRemovals(
+        IEnumerable<string> activeAccountIds)
+    {
+        var failures = new List<string>();
+        var stagingRoot = GetSessionRemovalStagingRoot();
+        if (!Directory.Exists(stagingRoot))
+        {
+            return failures;
+        }
+
+        var activeIds = activeAccountIds.ToHashSet(StringComparer.Ordinal);
+        foreach (var stagedDirectory in Directory.EnumerateDirectories(
+                     stagingRoot,
+                     "*",
+                     SearchOption.TopDirectoryOnly))
+        {
+            var directoryName = Path.GetFileName(stagedDirectory);
+            var separatorIndex = directoryName.IndexOf('.');
+            var accountId = separatorIndex > 0
+                ? directoryName[..separatorIndex]
+                : string.Empty;
+            var operationId = separatorIndex > 0
+                ? directoryName[(separatorIndex + 1)..]
+                : string.Empty;
+            if (!Guid.TryParseExact(accountId, "N", out _) ||
+                !Guid.TryParseExact(operationId, "N", out _))
+            {
+                failures.Add(
+                    $"Preserved an unrecognized staged account-session directory: {directoryName}");
+                continue;
+            }
+
+            try
+            {
+                if (activeIds.Contains(accountId))
+                {
+                    var originalDirectory = GetAccountHomeDirectory(accountId);
+                    if (Directory.Exists(originalDirectory))
+                    {
+                        throw new IOException(
+                            "Both the active and staged Apple Account session directories exist.");
+                    }
+
+                    Directory.Move(stagedDirectory, originalDirectory);
+                }
+                else
+                {
+                    Directory.Delete(stagedDirectory, recursive: true);
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                failures.Add(
+                    $"Could not recover staged account session {accountId}: {exception.Message}");
+            }
+        }
+
+        TryDeleteEmptySessionRemovalStagingRoot();
+        return failures;
     }
 
     public void InvalidateAccountCache(AppleAccountProfile account)
@@ -116,7 +247,7 @@ public sealed partial class IpatoolService
             return new IpatoolLoginResult(
                 false,
                 false,
-                "Enter the passphrase that protects the local ipatool credential vault.");
+                "IPA Bridge could not provide the protected local session key. Retry sign-in or reset this local profile.");
         }
 
         if (IpatoolJsonParser.HasSuccessfulLogin(result.Output))
@@ -163,7 +294,7 @@ public sealed partial class IpatoolService
         if (result.MissingPromptKey == "vault-passphrase")
         {
             throw new InvalidOperationException(
-                "The local credential-vault passphrase is required to check the account.");
+                "IPA Bridge could not unlock the protected local account session. Reconnect this profile once and try again.");
         }
 
         if (result.IsSuccess && IpatoolJsonParser.HasSuccess(result.Output))
@@ -415,6 +546,50 @@ public sealed partial class IpatoolService
         return Path.GetFullPath(Path.Combine(_accountSessionsRoot, accountId));
     }
 
+    private string GetSessionRemovalStagingRoot()
+    {
+        return Path.GetFullPath(Path.Combine(
+            _accountSessionsRoot,
+            SessionRemovalStagingDirectoryName));
+    }
+
+    private void ValidateStagedLocalAccountSessionRemoval(
+        StagedLocalAccountSessionRemoval removal)
+    {
+        var expectedOriginalDirectory = GetAccountHomeDirectory(removal.AccountId);
+        var stagingRoot = Path.TrimEndingDirectorySeparator(
+            GetSessionRemovalStagingRoot());
+        var stagedDirectory = Path.GetFullPath(removal.StagedDirectory);
+        if (!string.Equals(
+                expectedOriginalDirectory,
+                Path.GetFullPath(removal.OriginalDirectory),
+                StringComparison.OrdinalIgnoreCase) ||
+            !stagedDirectory.StartsWith(
+                stagingRoot + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The staged Apple Account session path is outside the managed account directory.");
+        }
+    }
+
+    private void TryDeleteEmptySessionRemovalStagingRoot()
+    {
+        try
+        {
+            var stagingRoot = GetSessionRemovalStagingRoot();
+            if (Directory.Exists(stagingRoot) &&
+                !Directory.EnumerateFileSystemEntries(stagingRoot).Any())
+            {
+                Directory.Delete(stagingRoot);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A later startup recovery pass will retry harmless empty-directory cleanup.
+        }
+    }
+
     internal static IReadOnlyDictionary<string, string> BuildAccountEnvironment(
         string homeDirectory)
     {
@@ -444,7 +619,7 @@ public sealed partial class IpatoolService
         if (result.MissingPromptKey == "vault-passphrase")
         {
             throw new InvalidOperationException(
-                "The local credential-vault passphrase is required to continue.");
+                "IPA Bridge could not unlock the protected local account session. Reconnect this profile once and try again.");
         }
 
         var error = IpatoolJsonParser.FindError(result.Output);

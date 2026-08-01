@@ -52,9 +52,16 @@
                            Text="Check again" />
               </StackPanel>
             </Button>
-            <Button Style="{StaticResource PrimaryButtonStyle}"
+            <Button AutomationProperties.HelpText="Installs the official Apple Devices package through Microsoft Store"
+                    Style="{StaticResource PrimaryButtonStyle}"
                     Command="{Binding Settings.InstallAppleDevicesCommand}"
-                    Content="Install Apple Devices" />
+                    Content="Get from Microsoft Store"
+                    Visibility="{Binding Devices.NeedsAppleDevicesInstallation, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <Button AutomationProperties.HelpText="Reinstalls the verified jkcoxson/idevice release from GitHub"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Command="{Binding Settings.InstallDeviceToolsCommand}"
+                    Content="Reinstall from GitHub"
+                    Visibility="{Binding Devices.NeedsDeviceToolsRepair, Converter={StaticResource BooleanToVisibilityConverter}}" />
           </StackPanel>
         </Grid>
       </Border>
@@ -79,13 +86,14 @@
             <TextBlock FontWeight="SemiBold" Text="iOS device tools required" />
             <TextBlock Margin="0,3,12,0"
                        Style="{StaticResource CaptionTextStyle}"
-                       Text="Download the pinned release and verify its SHA-256, or select a libimobiledevice folder in Settings."
+                       Text="Download the pinned jkcoxson/idevice release from GitHub and verify its SHA-256, or select a libimobiledevice folder in Settings."
                        TextWrapping="Wrap" />
           </StackPanel>
           <Button Grid.Column="2"
+                  AutomationProperties.HelpText="Installs the verified jkcoxson/idevice release from GitHub"
                   Style="{StaticResource PrimaryButtonStyle}"
                   Command="{Binding Settings.InstallDeviceToolsCommand}"
-                  Content="Install tools" />
+                  Content="Install from GitHub" />
         </Grid>
       </Border>
 

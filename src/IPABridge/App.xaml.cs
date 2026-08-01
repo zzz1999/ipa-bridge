@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using IPABridge.ViewModels;
@@ -81,6 +82,7 @@ public partial class App : Application
             }
 
             VerifyFirstAccountFlow(storeView, viewModel);
+            VerifyTwoFactorPanelLayout(storeView, viewModel);
             VerifyVerboseLoggingTipDismissal(storeView, viewModel.Store);
             mainWindow = new MainWindow();
             privacyDialog = new PrivacyDialog();
@@ -145,7 +147,6 @@ public partial class App : Application
             VerifyEditorViewport(store.StoreSearchBox, "App Store search input");
             VerifyEditorViewport(store.AppleAccountEmailBox, "Apple Account email input");
             VerifyEditorViewport(store.ApplePasswordBox, "Apple Account password input");
-            VerifyEditorViewport(store.VaultPassphraseBox, "local vault passphrase input");
             if (store.DataContext is not MainViewModel mainViewModel)
             {
                 throw new InvalidOperationException("The App Store page has no main view model.");
@@ -171,6 +172,11 @@ public partial class App : Application
             {
                 throw new InvalidOperationException(
                     "The first-account action does not replace the empty Apple Account selector.");
+            }
+
+            if (mainViewModel.Store.RequiresTwoFactor)
+            {
+                VerifyEditorViewport(store.TwoFactorCodeBox, "Apple verification code input");
             }
         }
 
@@ -297,6 +303,116 @@ public partial class App : Application
             storeView.VerboseLoggingTip.Visibility != Visibility.Collapsed)
         {
             throw new InvalidOperationException("The verbose logging tip did not collapse after dismissal.");
+        }
+    }
+
+    private static void VerifyTwoFactorPanelLayout(
+        StoreView storeView,
+        MainViewModel mainViewModel)
+    {
+        if (mainViewModel.Store.HasAccounts || Environment.ProcessPath is null)
+        {
+            return;
+        }
+
+        var originalIpatoolPath = mainViewModel.Settings.IpatoolPath;
+        try
+        {
+            mainViewModel.Settings.IpatoolPath = Environment.ProcessPath;
+            mainViewModel.Store.AddAccountCommand.Execute(null);
+            mainViewModel.Store.Email = "layout@example.invalid";
+            mainViewModel.Store.ApplePassword = "layout-only-secret";
+            typeof(StoreViewModel)
+                .GetProperty(nameof(StoreViewModel.RequiresTwoFactor))!
+                .SetValue(mainViewModel.Store, true);
+            storeView.DataContext = null;
+            storeView.DataContext = mainViewModel;
+            var compactStoreSize = new Size(794, 444);
+            storeView.Measure(compactStoreSize);
+            storeView.Arrange(new Rect(compactStoreSize));
+            storeView.UpdateLayout();
+
+            if (storeView.AccountCredentialsPanel.Visibility != Visibility.Visible ||
+                storeView.PrimaryAccountCredentialsPanel.Visibility != Visibility.Collapsed ||
+                storeView.TwoFactorVerificationPanel.Visibility != Visibility.Visible ||
+                storeView.TwoFactorCodeBox.ActualHeight < 52 ||
+                storeView.TwoFactorVerificationPanel.ActualHeight < 180)
+            {
+                throw new InvalidOperationException(
+                    "The two-factor challenge does not replace the credential form with a usable rounded panel.");
+            }
+
+            VerifyEditorViewport(storeView.TwoFactorCodeBox, "Apple verification code input");
+            storeView.FocusTwoFactorVerificationInput();
+            storeView.UpdateLayout();
+            VerifyElementWithinVerticalViewport(
+                storeView.TwoFactorBackButton,
+                storeView.AppleAccountScrollViewer,
+                "two-factor Back action");
+            VerifyElementWithinVerticalViewport(
+                storeView.TwoFactorVerifyButton,
+                storeView.AppleAccountScrollViewer,
+                "two-factor verification action");
+
+            mainViewModel.Store.TwoFactorCode = "12";
+            storeView.TwoFactorCodeBox.SelectAll();
+            var formattedCode = new DataObject();
+            formattedCode.SetData(DataFormats.UnicodeText, "123 456\r\n");
+            storeView.TwoFactorCodeBox.RaiseEvent(new DataObjectPastingEventArgs(
+                formattedCode,
+                isDragDrop: false,
+                formatToApply: DataFormats.UnicodeText));
+            if (storeView.TwoFactorCodeBox.Text != "123456" ||
+                mainViewModel.Store.TwoFactorCode != "123456" ||
+                !BindingOperations.IsDataBound(storeView.TwoFactorCodeBox, TextBox.TextProperty))
+            {
+                throw new InvalidOperationException(
+                    "Formatted two-factor code paste was not normalized without breaking its binding.");
+            }
+
+            if (AutomationProperties.GetLiveSetting(storeView.StoreStatusText) !=
+                    AutomationLiveSetting.Polite ||
+                string.IsNullOrWhiteSpace(AutomationProperties.GetName(storeView.StoreStatusText)))
+            {
+                throw new InvalidOperationException(
+                    "The App Store status is not exposed as a named polite live region.");
+            }
+
+            if (!mainViewModel.Store.CancelTwoFactorCommand.CanExecute(null))
+            {
+                throw new InvalidOperationException("The two-factor panel has no executable Back action.");
+            }
+
+            mainViewModel.Store.CancelTwoFactorCommand.Execute(null);
+            storeView.UpdateLayout();
+            if (storeView.TwoFactorVerificationPanel.Visibility != Visibility.Collapsed ||
+                storeView.PrimaryAccountCredentialsPanel.Visibility != Visibility.Visible)
+            {
+                throw new InvalidOperationException(
+                    "Leaving two-factor verification does not restore the credential form.");
+            }
+
+            mainViewModel.Store.CancelAccountEditCommand.Execute(null);
+        }
+        finally
+        {
+            mainViewModel.Settings.IpatoolPath = originalIpatoolPath;
+        }
+    }
+
+    private static void VerifyElementWithinVerticalViewport(
+        FrameworkElement element,
+        ScrollViewer viewport,
+        string description)
+    {
+        var bounds = element
+            .TransformToAncestor(viewport)
+            .TransformBounds(new Rect(element.RenderSize));
+        if (bounds.Top < -0.5 || bounds.Bottom > viewport.ViewportHeight + 0.5)
+        {
+            throw new InvalidOperationException(
+                $"The {description} is outside the compact account viewport: " +
+                $"bounds={bounds}, viewport height={viewport.ViewportHeight:F1}.");
         }
     }
 

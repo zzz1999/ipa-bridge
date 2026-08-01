@@ -31,10 +31,10 @@ jobs:
       - name: Prepare pinned ipatool contract binary
         shell: pwsh
         run: |
-          $archiveUrl = 'https://github.com/majd/ipatool/releases/download/v2.3.0/ipatool-2.3.0-windows-amd64.tar.gz'
-          $expectedHash = 'eaf208f0fee964a82f14f8eda60c4b0568fe555ad97729bb74277d3d7c0e4d54'
+          $archiveUrl = 'https://github.com/majd/ipatool/releases/download/v2.3.1/ipatool-2.3.1-windows-amd64.tar.gz'
+          $expectedHash = '8e986ed9320f205bcd1fd24640ec46a5b92ff346425aff28d1103e57d2fdcadb'
           $toolDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts\test-tools\ipatool'
-          $archive = Join-Path $toolDirectory 'ipatool-2.3.0-windows-amd64.tar.gz'
+          $archive = Join-Path $toolDirectory 'ipatool-2.3.1-windows-amd64.tar.gz'
           New-Item -ItemType Directory -Force -Path $toolDirectory | Out-Null
 
           Invoke-WebRequest -Uri $archiveUrl -OutFile $archive

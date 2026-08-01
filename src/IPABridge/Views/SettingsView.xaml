@@ -87,9 +87,10 @@
 
             <Button Margin="0,16,0,0"
                     HorizontalAlignment="Stretch"
+                    AutomationProperties.HelpText="Installs the verified jkcoxson/idevice release from GitHub"
                     Style="{StaticResource PrimaryButtonStyle}"
                     Command="{Binding Settings.InstallDeviceToolsCommand}"
-                    Content="Install Pinned Release" />
+                    Content="Install Verified GitHub Release" />
 
             <TextBlock Margin="2,16,0,7" Style="{StaticResource CaptionTextStyle}" Text="Device tools folder" />
             <Grid>
@@ -110,7 +111,7 @@
                     HorizontalAlignment="Left"
                     Style="{StaticResource GhostButtonStyle}"
                     Command="{Binding Settings.OpenDeviceToolsSourceCommand}"
-                    Content="View jkcoxson/idevice Source ↗" />
+                    Content="View jkcoxson/idevice on GitHub ↗" />
           </StackPanel>
         </Border>
       </Grid>
@@ -167,8 +168,9 @@
                 </StackPanel>
               </Button>
               <Button Style="{StaticResource PrimaryButtonStyle}"
+                      AutomationProperties.HelpText="Installs or updates the official Apple Devices package through Microsoft Store"
                       Command="{Binding Settings.InstallAppleDevicesCommand}"
-                      Content="Install / Update" />
+                      Content="Install / Update via Microsoft Store" />
             </StackPanel>
           </Grid>
 
@@ -315,7 +317,7 @@
             <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Security &amp; Privacy" />
             <TextBlock Margin="0,11,0,0"
                        Style="{StaticResource BodyTextStyle}"
-                       Text="• Apple passwords, two-factor codes, and vault passphrases stay in process memory only while needed and are never written to IPA Bridge settings.&#x0a;• Sign-in uses a secure Windows ConPTY terminal; sensitive values never appear in the process command line.&#x0a;• IPA Bridge never enables ipatool verbose logging or stores raw authentication output.&#x0a;• Automatic tool downloads must match reviewed SHA-256 values pinned in this source tree before installation."
+                       Text="• Apple passwords and two-factor codes stay in process memory only while needed and are never written to IPA Bridge settings.&#x0a;• Per-profile 256-bit local session keys are generated automatically and stored only inside AES-256-GCM encrypted settings.&#x0a;• Sign-in uses a secure Windows ConPTY terminal; sensitive values never appear in the process command line.&#x0a;• IPA Bridge never enables ipatool verbose logging or stores raw authentication output.&#x0a;• Automatic tool downloads must match reviewed SHA-256 values pinned in this source tree before installation."
                        TextWrapping="Wrap" />
           </StackPanel>
         </Border>

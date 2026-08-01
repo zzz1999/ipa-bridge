@@ -101,7 +101,7 @@
               <TextBlock Margin="0,5,0,0"
                          Style="{StaticResource BodyTextStyle}"
                          TextWrapping="Wrap"
-                         Text="IPA Bridge stores paths, preferences, saved Apple Account email profiles, and the selected profile in your Windows user profile. It does not save these settings to an IPA Bridge account or an IPA Bridge-operated cloud service." />
+                         Text="IPA Bridge stores paths, preferences, saved Apple Account email profiles, generated per-profile local session keys, and the selected profile in your Windows user profile. It does not save these settings to an IPA Bridge account or an IPA Bridge-operated cloud service." />
             </StackPanel>
           </Border>
 
@@ -117,11 +117,11 @@
 
           <Border Margin="0,0,0,10" Style="{StaticResource CompactCardStyle}">
             <StackPanel>
-              <TextBlock FontSize="15" FontWeight="SemiBold" Text="Credentials are not saved by IPA Bridge" />
+              <TextBlock FontSize="15" FontWeight="SemiBold" Text="Apple credentials are not saved" />
               <TextBlock Margin="0,5,0,0"
                          Style="{StaticResource BodyTextStyle}"
                          TextWrapping="Wrap"
-                         Text="IPA Bridge does not save your Apple Account password, two-factor verification code, or ipatool vault passphrase in its settings. These values are supplied to the official ipatool process through a local Windows pseudoconsole only when required. Each saved profile receives a separate local ipatool home so its account record, cookies, and Apple storefront do not overlap another profile." />
+                         Text="IPA Bridge never saves your Apple Account password or two-factor verification code. It generates a separate random 256-bit local session key for each profile and stores that key only inside the AES-256-GCM encrypted settings so you do not have to enter or remember it. Sensitive values are supplied to official ipatool processes through a local Windows pseudoconsole only when required." />
             </StackPanel>
           </Border>
 
@@ -131,7 +131,7 @@
               <TextBlock Margin="0,5,0,0"
                          Style="{StaticResource BodyTextStyle}"
                          TextWrapping="Wrap"
-                         Text="Downloaded IPA files, files in folders you select, and ipatool's own account sessions are not protected by IPA Bridge's settings key. ipatool encrypts its account record with the vault passphrase; its isolated cookie file relies on access controls for your Windows user profile." />
+                         Text="Downloaded IPA files, files in folders you select, and ipatool's own account-session files are not directly encrypted by IPA Bridge's settings key. ipatool encrypts its account record with the generated profile key; its isolated cookie file relies on access controls for your Windows user profile." />
             </StackPanel>
           </Border>
 
