@@ -104,12 +104,6 @@
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
               <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.72" />
-              <Setter TargetName="ButtonBorder" Property="RenderTransform">
-                <Setter.Value>
-                  <ScaleTransform ScaleX="0.98" ScaleY="0.98" />
-                </Setter.Value>
-              </Setter>
-              <Setter TargetName="ButtonBorder" Property="RenderTransformOrigin" Value="0.5,0.5" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.42" />
