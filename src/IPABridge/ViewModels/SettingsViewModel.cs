@@ -19,6 +19,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private string _installationStage = string.Empty;
     private double _installationProgress;
     private bool _isInstalling;
+    private bool _isInstallingIpatool;
+    private string _ipatoolInstallationMessage =
+        "You can also choose an existing ipatool.exe in Settings.";
     private string _statusMessage = "Settings are stored locally and do not include your Apple Account password.";
 
     public SettingsViewModel(
@@ -195,6 +198,18 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    public bool IsInstallingIpatool
+    {
+        get => _isInstallingIpatool;
+        private set => SetProperty(ref _isInstallingIpatool, value);
+    }
+
+    public string IpatoolInstallationMessage
+    {
+        get => _ipatoolInstallationMessage;
+        private set => SetProperty(ref _ipatoolInstallationMessage, value);
+    }
+
     public string StatusMessage
     {
         get => _statusMessage;
@@ -244,12 +259,32 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private async Task InstallIpatoolAsync()
     {
-        if (await RunInstallationAsync(
-            "Install ipatool",
-            progress => _toolBootstrapService.InstallIpatoolAsync(progress),
-            "The official ipatool was installed and passed SHA-256 verification."))
+        IsInstallingIpatool = true;
+        InstallationStage = "Preparing the official ipatool download…";
+        IpatoolInstallationMessage =
+            "IPA Bridge downloads the reviewed official release and verifies its SHA-256 before use.";
+        try
         {
-            ToolsChanged?.Invoke(this, EventArgs.Empty);
+            if (await RunInstallationAsync(
+                    "Install ipatool",
+                    progress => _toolBootstrapService.InstallIpatoolAsync(progress),
+                    "The official ipatool was installed and passed SHA-256 verification."))
+            {
+                IpatoolInstallationMessage =
+                    "ipatool is ready. Enter your Apple Account details to continue.";
+                ToolsChanged?.Invoke(this, EventArgs.Empty);
+            }
+            else
+            {
+                var reason = StatusMessage.Trim().TrimEnd('.');
+                IpatoolInstallationMessage =
+                    $"ipatool could not be installed. {reason}. " +
+                    "Try again or choose an existing ipatool.exe in Settings.";
+            }
+        }
+        finally
+        {
+            IsInstallingIpatool = false;
         }
     }
 

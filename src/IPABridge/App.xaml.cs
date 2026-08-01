@@ -80,7 +80,7 @@ public partial class App : Application
                 }
             }
 
-            VerifyFirstAccountFlow(storeView, viewModel.Store);
+            VerifyFirstAccountFlow(storeView, viewModel);
             VerifyVerboseLoggingTipDismissal(storeView, viewModel.Store);
             mainWindow = new MainWindow();
             privacyDialog = new PrivacyDialog();
@@ -173,6 +173,31 @@ public partial class App : Application
                     "The first-account action does not replace the empty Apple Account selector.");
             }
         }
+
+        if (view is DevicesView devices)
+        {
+            if (devices.DataContext is not MainViewModel mainViewModel)
+            {
+                throw new InvalidOperationException("The Devices page has no main view model.");
+            }
+
+            var expectedVisibility = mainViewModel.Devices.IsDeviceScanAvailable
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            if (devices.RefreshDevicesButton.Visibility != expectedVisibility)
+            {
+                throw new InvalidOperationException(
+                    "The connected-device refresh action does not match device readiness.");
+            }
+
+            if (expectedVisibility == Visibility.Visible &&
+                (devices.RefreshDevicesButton.ActualWidth < 98 ||
+                 devices.RefreshDevicesButton.ActualHeight < 44))
+            {
+                throw new InvalidOperationException(
+                    "The connected-device refresh action has an undersized hit target.");
+            }
+        }
     }
 
     private static void VerifyEditorViewport(Control input, string description)
@@ -191,8 +216,9 @@ public partial class App : Application
         }
     }
 
-    private static void VerifyFirstAccountFlow(StoreView storeView, StoreViewModel viewModel)
+    private static void VerifyFirstAccountFlow(StoreView storeView, MainViewModel mainViewModel)
     {
+        var viewModel = mainViewModel.Store;
         if (viewModel.HasAccounts)
         {
             return;
@@ -213,6 +239,26 @@ public partial class App : Application
         {
             throw new InvalidOperationException(
                 "The first-account action did not replace the empty state with an editable credential form.");
+        }
+
+        if (mainViewModel.Settings.IsIpatoolAvailable)
+        {
+            if (storeView.IpatoolSignInPrerequisitePanel.Visibility != Visibility.Collapsed ||
+                storeView.AccountCredentialsPanel.Visibility != Visibility.Visible ||
+                storeView.AddAccountSignInButton.Visibility != Visibility.Visible ||
+                storeView.ExistingAccountSessionActions.Visibility != Visibility.Collapsed)
+            {
+                throw new InvalidOperationException(
+                    "The ready first-account flow does not expose one clear sign-in action.");
+            }
+        }
+        else if (storeView.IpatoolSignInPrerequisitePanel.Visibility != Visibility.Visible ||
+                 storeView.AccountCredentialsPanel.Visibility != Visibility.Collapsed ||
+                 storeView.InstallIpatoolBeforeSignInButton.Command is not { } installCommand ||
+                 !installCommand.CanExecute(null))
+        {
+            throw new InvalidOperationException(
+                "The first-account flow does not replace unavailable sign-in with an executable ipatool prerequisite.");
         }
 
         var cancelCommand = viewModel.CancelAccountEditCommand;

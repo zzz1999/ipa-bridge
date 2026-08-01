@@ -38,7 +38,7 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
         _deviceEnvironmentGate = deviceEnvironmentGate;
         _addActivity = addActivity;
 
-        RefreshCommand = new AsyncRelayCommand(() => RefreshAsync(), CanRefresh);
+        RefreshCommand = new AsyncRelayCommand(RefreshConnectedDevicesAsync, CanScanDevices);
         PairCommand = new AsyncRelayCommand(PairAsync, CanPair);
         InstallCommand = new AsyncRelayCommand(InstallAsync, CanInstall);
         CancelInstallCommand = new RelayCommand(CancelInstall, () => IsInstalling);
@@ -106,6 +106,8 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
         {
             if (SetProperty(ref _hasAppleDeviceSupport, value))
             {
+                OnPropertyChanged(nameof(IsDeviceScanAvailable));
+                RefreshCommand.NotifyCanExecuteChanged();
                 PairCommand.NotifyCanExecuteChanged();
                 InstallCommand.NotifyCanExecuteChanged();
             }
@@ -170,6 +172,8 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
 
     public bool AreDeviceToolsAvailable => _deviceService.ToolLocation.IsAvailable;
 
+    public bool IsDeviceScanAvailable => HasOperationalDeviceEnvironment();
+
     public string DeviceToolsLabel => _deviceService.ToolLocation.Backend switch
     {
         DeviceBackend.ModernIdeviceTools => "idevice-tools",
@@ -187,6 +191,7 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
                 return;
             }
 
+            OnPropertyChanged(nameof(RefreshActionLabel));
             RefreshCommand.NotifyCanExecuteChanged();
             PairCommand.NotifyCanExecuteChanged();
             InstallCommand.NotifyCanExecuteChanged();
@@ -221,6 +226,8 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
         get => _statusMessage;
         private set => SetProperty(ref _statusMessage, value);
     }
+
+    public string RefreshActionLabel => IsRefreshing ? "Refreshing…" : "Refresh";
 
     public string InstallationLog
     {
@@ -257,7 +264,9 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
         AppleDeviceSupport = status;
         ApplyAutomaticRefreshPreference();
         OnPropertyChanged(nameof(AreDeviceToolsAvailable));
+        OnPropertyChanged(nameof(IsDeviceScanAvailable));
         OnPropertyChanged(nameof(DeviceToolsLabel));
+        RefreshCommand.NotifyCanExecuteChanged();
         PairCommand.NotifyCanExecuteChanged();
         InstallCommand.NotifyCanExecuteChanged();
         if (!HasAppleDeviceSupport || !AreDeviceToolsAvailable)
@@ -265,17 +274,13 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
             ClearDevices();
         }
 
-        if (!HasAppleDeviceSupport)
+        if (!HasAppleDeviceSupport || !AreDeviceToolsAvailable)
         {
-            StatusMessage = AppleDeviceSupportDetail;
-        }
-        else if (!AreDeviceToolsAvailable)
-        {
-            StatusMessage = "The Apple driver is ready; the iOS device tools still need to be installed.";
+            StatusMessage = "Complete device setup above to scan for connected devices.";
         }
         else
         {
-            StatusMessage = AppleDeviceSupportDetail;
+            StatusMessage = "Ready to scan for connected devices.";
         }
     }
 
@@ -293,7 +298,7 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
 
     public async Task RefreshAsync(bool silent = false)
     {
-        if (!CanRefresh())
+        if (!CanRunRefresh())
         {
             return;
         }
@@ -312,6 +317,11 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
         IsRefreshing = true;
         try
         {
+            if (!silent)
+            {
+                StatusMessage = "Looking for connected devices…";
+            }
+
             await RefreshPrerequisitesCoreAsync();
             if (!HasAppleDeviceSupport || !AreDeviceToolsAvailable)
             {
@@ -331,9 +341,12 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
             SelectedDevice = Items.FirstOrDefault(device =>
                                  string.Equals(device.Udid, previousUdid, StringComparison.OrdinalIgnoreCase))
                              ?? Items.FirstOrDefault();
-            StatusMessage = devices.Count == 0
-                ? "No devices found. Unlock your iPhone, connect it with a data cable, and select \"Trust.\""
-                : $"Connected devices: {devices.Count}.";
+            StatusMessage = devices.Count switch
+            {
+                0 => "No devices connected. Unlock your iPhone or iPad, connect it with a data cable, and tap Trust.",
+                1 => "1 device connected.",
+                _ => $"{devices.Count} devices connected."
+            };
         }
         catch (Exception exception)
         {
@@ -356,11 +369,21 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
             await _prerequisiteService.GetAppleDeviceSupportStatusAsync());
     }
 
-    private bool CanRefresh()
+    private Task RefreshConnectedDevicesAsync()
+    {
+        return IsDeviceScanAvailable ? RefreshAsync() : Task.CompletedTask;
+    }
+
+    private bool CanRunRefresh()
     {
         return !IsRefreshing &&
                !IsInstalling &&
                !_deviceEnvironmentGate.IsBusy;
+    }
+
+    private bool CanScanDevices()
+    {
+        return CanRunRefresh() && IsDeviceScanAvailable;
     }
 
     private bool CanPair()

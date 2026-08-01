@@ -575,6 +575,10 @@ try
         "automatic device refresh timer supports repeated preference changes");
 
     devicesViewModel.ApplyAppleDeviceSupportStatus(readyAppleSupport);
+    Check(
+        devicesViewModel.IsDeviceScanAvailable &&
+        devicesViewModel.RefreshCommand.CanExecute(null),
+        "the connected-device refresh action is available only after setup is ready");
     var staleDevice = new ConnectedDevice
     {
         Udid = deviceUdid,
@@ -615,8 +619,10 @@ try
         devicesViewModel.Items.Count == 0 && devicesViewModel.SelectedDevice is null,
         "readiness loss clears stale connected devices and selection");
     Check(
+        !devicesViewModel.IsDeviceScanAvailable &&
+        !devicesViewModel.RefreshCommand.CanExecute(null) &&
         !devicesViewModel.PairCommand.CanExecute(null),
-        "readiness loss disables pairing");
+        "readiness loss hides device scanning and disables device actions");
 }
 finally
 {
@@ -1357,6 +1363,9 @@ else
         cancelableStore.Email = "cancel@example.invalid";
         cancelableStore.ApplePassword = "temporary-apple-secret";
         cancelableStore.VaultPassphrase = "temporary-vault-secret";
+        Check(
+            cancelableStore.LoginCommand.CanExecute(null),
+            "complete Apple Account credentials enable sign-in when ipatool is available");
         var loginTask = cancelableStore.LoginCommand.ExecuteAsync();
         var markerDeadline = DateTime.UtcNow.AddSeconds(10);
         while (!File.Exists(loginWaitMarker) && DateTime.UtcNow < markerDeadline)

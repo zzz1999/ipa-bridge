@@ -104,29 +104,46 @@
               <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
-              <StackPanel>
-                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Connected Devices" />
-                <TextBlock Margin="0,4,0,0"
-                           Style="{StaticResource CaptionTextStyle}"
-                           Text="{Binding Devices.StatusMessage}"
-                           TextWrapping="Wrap" />
-              </StackPanel>
-              <Button Grid.Column="1"
-                      AutomationProperties.Name="Refresh devices"
-                      Style="{StaticResource RoundedIconButtonStyle}"
-                      ToolTip="Refresh devices"
-                      Command="{Binding Devices.RefreshCommand}">
-                <Viewbox Width="22" Height="22" IsHitTestVisible="False">
-                  <Grid Width="24" Height="24">
-                    <Path Data="{StaticResource RefreshIconGeometry}"
-                          Style="{StaticResource RoundedButtonIconStyle}" />
-                  </Grid>
-                </Viewbox>
+              <TextBlock VerticalAlignment="Center"
+                         Style="{StaticResource SectionTitleStyle}"
+                         Text="Connected Devices" />
+              <Button x:Name="RefreshDevicesButton"
+                      Grid.Column="1"
+                      MinWidth="98"
+                      Padding="14,9"
+                      AutomationProperties.Name="Refresh connected devices"
+                      Command="{Binding Devices.RefreshCommand}"
+                      Style="{StaticResource SecondaryButtonStyle}"
+                      Visibility="{Binding Devices.IsDeviceScanAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel Orientation="Horizontal">
+                  <Viewbox Width="17" Height="17" Margin="0,0,8,0" IsHitTestVisible="False">
+                    <Grid Width="24" Height="24">
+                      <Path Data="{StaticResource RefreshIconGeometry}"
+                            Style="{StaticResource RoundedButtonIconStyle}"
+                            StrokeThickness="3.1" />
+                    </Grid>
+                  </Viewbox>
+                  <TextBlock VerticalAlignment="Center"
+                             FontWeight="SemiBold"
+                             Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                             Text="{Binding Devices.RefreshActionLabel}" />
+                </StackPanel>
               </Button>
+              <TextBlock Grid.Row="1"
+                         Grid.ColumnSpan="2"
+                         Margin="0,5,0,0"
+                         AutomationProperties.LiveSetting="Polite"
+                         Style="{StaticResource CaptionTextStyle}"
+                         Text="{Binding Devices.StatusMessage}"
+                         TextWrapping="Wrap" />
             </Grid>
 
             <ListBox Grid.Row="1"

@@ -375,6 +375,10 @@ public sealed class StoreViewModel : ObservableObject
             ClearAccountOperationState(clearSecrets: true);
             StatusMessage = "Install the official ipatool from Settings first.";
         }
+        else if (IsAddingAccount)
+        {
+            StatusMessage = "ipatool is ready. Enter your Apple Account details to continue.";
+        }
         else if (SelectedAccount is null)
         {
             StatusMessage = "Add an Apple Account to search its App Store region.";
@@ -459,7 +463,9 @@ public sealed class StoreViewModel : ObservableObject
         IsRemoveConfirmationVisible = false;
         ClearAccountOperationState(clearSecrets: true);
         Email = string.Empty;
-        StatusMessage = "Enter another Apple Account. Its ipatool session and storefront will be kept separate.";
+        StatusMessage = _ipatoolService.IsAvailable
+            ? "Enter another Apple Account. Its ipatool session and storefront will be kept separate."
+            : "Install the official ipatool to continue adding this Apple Account.";
     }
 
     private void CancelAccountEdit()

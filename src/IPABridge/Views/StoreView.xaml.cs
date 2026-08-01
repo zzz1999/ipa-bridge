@@ -9,6 +9,7 @@ namespace IPABridge.Views;
 public partial class StoreView : UserControl
 {
     private StoreViewModel? _storeViewModel;
+    private SettingsViewModel? _settingsViewModel;
 
     public StoreView()
     {
@@ -28,6 +29,9 @@ public partial class StoreView : UserControl
         {
             _storeViewModel = mainViewModel.Store;
             _storeViewModel.PropertyChanged += StoreViewModelOnPropertyChanged;
+            _settingsViewModel = mainViewModel.Settings;
+            _settingsViewModel.PropertyChanged += SettingsViewModelOnPropertyChanged;
+            FocusAccountEntryTarget(mainViewModel);
         }
     }
 
@@ -37,6 +41,12 @@ public partial class StoreView : UserControl
         {
             _storeViewModel.PropertyChanged -= StoreViewModelOnPropertyChanged;
             _storeViewModel = null;
+        }
+
+        if (_settingsViewModel is not null)
+        {
+            _settingsViewModel.PropertyChanged -= SettingsViewModelOnPropertyChanged;
+            _settingsViewModel = null;
         }
     }
 
@@ -71,13 +81,35 @@ public partial class StoreView : UserControl
 
         if (e.PropertyName == nameof(StoreViewModel.IsAddingAccount) && viewModel.IsAddingAccount)
         {
-            // The Add action can collapse its own row; move keyboard focus to the first useful field.
-            Dispatcher.BeginInvoke(() =>
-            {
-                AppleAccountEmailBox.BringIntoView();
-                AppleAccountEmailBox.Focus();
-            });
+            FocusAccountEntryTarget();
         }
+    }
+
+    private void SettingsViewModelOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SettingsViewModel.IsIpatoolAvailable))
+        {
+            FocusAccountEntryTarget();
+        }
+    }
+
+    private void FocusAccountEntryTarget(MainViewModel? mainViewModel = null)
+    {
+        var resolvedViewModel = mainViewModel ?? DataContext as MainViewModel;
+        if (resolvedViewModel?.Store.IsAddingAccount != true)
+        {
+            return;
+        }
+
+        // The Add action replaces its own row. Focus either the prerequisite or the first credential field.
+        Dispatcher.BeginInvoke(() =>
+        {
+            Control target = resolvedViewModel.Settings.IsIpatoolAvailable
+                ? AppleAccountEmailBox
+                : InstallIpatoolBeforeSignInButton;
+            target.BringIntoView();
+            target.Focus();
+        });
     }
 
     private void ApplePasswordBox_OnPasswordChanged(object sender, RoutedEventArgs e)
