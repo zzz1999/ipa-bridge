@@ -34,9 +34,24 @@
           </StackPanel>
           <StackPanel Grid.Column="2" Orientation="Horizontal">
             <Button Margin="0,0,8,0"
+                    AutomationProperties.Name="Check Apple device support again"
                     Style="{StaticResource SecondaryButtonStyle}"
                     Command="{Binding Settings.RefreshAppleDeviceSupportCommand}"
-                    Content="Check again" />
+                    ToolTip="Check Apple device support again">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="17" Height="17" Margin="0,0,8,0" IsHitTestVisible="False">
+                  <Grid Width="24" Height="24">
+                    <Path Data="{StaticResource RefreshIconGeometry}"
+                          Style="{StaticResource RoundedButtonIconStyle}"
+                          StrokeThickness="3.1" />
+                  </Grid>
+                </Viewbox>
+                <TextBlock VerticalAlignment="Center"
+                           FontWeight="SemiBold"
+                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                           Text="Check again" />
+              </StackPanel>
+            </Button>
             <Button Style="{StaticResource PrimaryButtonStyle}"
                     Command="{Binding Settings.InstallAppleDevicesCommand}"
                     Content="Install Apple Devices" />
@@ -102,15 +117,16 @@
               </StackPanel>
               <Button Grid.Column="1"
                       AutomationProperties.Name="Refresh devices"
-                      Width="46"
-                      Height="46"
-                      MinHeight="46"
-                      Padding="0"
-                      Style="{StaticResource GhostButtonStyle}"
-                      FontFamily="{StaticResource AppFont}"
-                      FontSize="20"
-                      Content="↻"
-                      Command="{Binding Devices.RefreshCommand}" />
+                      Style="{StaticResource RoundedIconButtonStyle}"
+                      ToolTip="Refresh devices"
+                      Command="{Binding Devices.RefreshCommand}">
+                <Viewbox Width="22" Height="22" IsHitTestVisible="False">
+                  <Grid Width="24" Height="24">
+                    <Path Data="{StaticResource RefreshIconGeometry}"
+                          Style="{StaticResource RoundedButtonIconStyle}" />
+                  </Grid>
+                </Viewbox>
+              </Button>
             </Grid>
 
             <ListBox Grid.Row="1"

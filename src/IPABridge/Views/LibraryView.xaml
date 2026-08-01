@@ -31,17 +31,17 @@
                     Style="{StaticResource SecondaryButtonStyle}"
                     Click="ChooseExternalIpa_OnClick"
                     Content="Choose Another IPA" />
-            <Button Width="46"
-                    Height="46"
-                    MinHeight="46"
-                    AutomationProperties.Name="Refresh IPA library"
-                    Padding="0"
-                    Style="{StaticResource GhostButtonStyle}"
-                    FontFamily="{StaticResource AppFont}"
-                    FontSize="18"
-                    Content="↻"
-                    ToolTip="Refresh"
-                    Command="{Binding Library.RefreshCommand}" />
+            <Button AutomationProperties.Name="Refresh IPA library"
+                    Style="{StaticResource RoundedIconButtonStyle}"
+                    ToolTip="Refresh IPA library"
+                    Command="{Binding Library.RefreshCommand}">
+              <Viewbox Width="22" Height="22" IsHitTestVisible="False">
+                <Grid Width="24" Height="24">
+                  <Path Data="{StaticResource RefreshIconGeometry}"
+                        Style="{StaticResource RoundedButtonIconStyle}" />
+                </Grid>
+              </Viewbox>
+            </Button>
           </StackPanel>
         </Grid>
 

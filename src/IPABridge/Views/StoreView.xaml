@@ -418,12 +418,17 @@
                       AutomationProperties.Name="Dismiss verbose logging tip"
                       Background="#169A5A12"
                       Command="{Binding Store.DismissVerboseLoggingTipCommand}"
-                      Content="&#xE711;"
-                      FontFamily="{StaticResource SymbolFont}"
-                      FontSize="12"
                       Foreground="#9A5A12"
                       Style="{StaticResource GhostButtonStyle}"
-                      ToolTip="Dismiss tip" />
+                      ToolTip="Dismiss tip">
+                <Viewbox Width="16" Height="16" IsHitTestVisible="False">
+                  <Grid Width="24" Height="24">
+                    <Path Data="{StaticResource CloseIconGeometry}"
+                          Style="{StaticResource RoundedButtonIconStyle}"
+                          StrokeThickness="3.3" />
+                  </Grid>
+                </Viewbox>
+              </Button>
             </Grid>
           </Border>
         </StackPanel>

@@ -143,13 +143,29 @@
               <TextBlock FontSize="15" FontWeight="SemiBold" Text="Apple Device Drivers &amp; Service" />
               <TextBlock Margin="0,3,0,0"
                          Style="{StaticResource CaptionTextStyle}"
+                         TextWrapping="Wrap"
                          Text="{Binding Devices.AppleDeviceSupport.OverallLabel}" />
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal">
               <Button Margin="0,0,8,0"
+                      AutomationProperties.Name="Check Apple device support again"
                       Style="{StaticResource SecondaryButtonStyle}"
                       Command="{Binding Settings.RefreshAppleDeviceSupportCommand}"
-                      Content="Check Again" />
+                      ToolTip="Check Apple device support again">
+                <StackPanel Orientation="Horizontal">
+                  <Viewbox Width="17" Height="17" Margin="0,0,8,0" IsHitTestVisible="False">
+                    <Grid Width="24" Height="24">
+                      <Path Data="{StaticResource RefreshIconGeometry}"
+                            Style="{StaticResource RoundedButtonIconStyle}"
+                            StrokeThickness="3.1" />
+                    </Grid>
+                  </Viewbox>
+                  <TextBlock VerticalAlignment="Center"
+                             FontWeight="SemiBold"
+                             Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                             Text="Check Again" />
+                </StackPanel>
+              </Button>
               <Button Style="{StaticResource PrimaryButtonStyle}"
                       Command="{Binding Settings.InstallAppleDevicesCommand}"
                       Content="Install / Update" />

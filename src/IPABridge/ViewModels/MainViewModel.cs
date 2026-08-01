@@ -60,14 +60,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             deviceEnvironmentGate,
             AddActivity);
 
-        // Rounded vector paths stay crisp and preserve their visual weight at every Windows DPI.
         NavigationItems =
         [
-            new NavigationItem { Label = "Overview", IconData = "M3,11 L12,3 L21,11 M5,9.5 V21 H10 V15 H14 V21 H19 V9.5", Page = NavigationPage.Dashboard, IsActive = true },
-            new NavigationItem { Label = "App Store", IconData = "M5,8 H19 L20,21 H4 Z M8,8 V6 A4,4 0 0 1 16,6 V8", Page = NavigationPage.Store },
-            new NavigationItem { Label = "IPA Library", IconData = "M6,3 H19 V21 H8 A2,2 0 0 1 6,19 Z M9,3 V21", Page = NavigationPage.Library },
-            new NavigationItem { Label = "Devices", IconData = "M3,5 H21 V17 H3 Z M8,21 H16 M10,17 V21 M14,17 V21", Page = NavigationPage.Devices },
-            new NavigationItem { Label = "Settings", IconData = "M4,6 H20 M8,3 V9 M4,12 H20 M16,9 V15 M4,18 H20 M10,15 V21", Page = NavigationPage.Settings }
+            new NavigationItem { Label = "Overview", Page = NavigationPage.Dashboard, IsActive = true },
+            new NavigationItem { Label = "App Store", Page = NavigationPage.Store },
+            new NavigationItem { Label = "IPA Library", Page = NavigationPage.Library },
+            new NavigationItem { Label = "Devices", Page = NavigationPage.Devices },
+            new NavigationItem { Label = "Settings", Page = NavigationPage.Settings }
         ];
 
         NavigateCommand = new RelayCommand(

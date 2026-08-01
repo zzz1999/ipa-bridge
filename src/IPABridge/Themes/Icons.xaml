@@ -1,0 +1,32 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Every geometry uses a 24 by 24 coordinate space for consistent alignment. -->
+  <PathGeometry x:Key="NavigationOverviewIconGeometry"
+                Figures="M4.2,10.8 L10.7,4.9 C11.45,4.2 12.55,4.2 13.3,4.9 L19.8,10.8 C20.25,11.2 20.5,11.8 20.5,12.4 V18.6 C20.5,19.9 19.4,21 18.1,21 H15.2 V16.1 C15.2,14.3 13.8,12.9 12,12.9 C10.2,12.9 8.8,14.3 8.8,16.1 V21 H5.9 C4.6,21 3.5,19.9 3.5,18.6 V12.4 C3.5,11.8 3.75,11.2 4.2,10.8 Z" />
+  <PathGeometry x:Key="NavigationStoreIconGeometry"
+                Figures="M6.4,8.5 H17.6 C18.8,8.5 19.75,9.4 19.85,10.6 L20.55,18.4 C20.7,19.85 19.55,21 18.1,21 H5.9 C4.45,21 3.3,19.85 3.45,18.4 L4.15,10.6 C4.25,9.4 5.2,8.5 6.4,8.5 Z M8.3,9 V7 C8.3,4.95 9.95,3.3 12,3.3 C14.05,3.3 15.7,4.95 15.7,7 V9" />
+  <PathGeometry x:Key="NavigationLibraryIconGeometry"
+                Figures="M4.4,5.7 C7.2,4.8 9.9,5.35 12,7.15 V20.5 C9.9,18.7 7.2,18.15 4.4,19.05 Z M19.6,5.7 C16.8,4.8 14.1,5.35 12,7.15 V20.5 C14.1,18.7 16.8,18.15 19.6,19.05 Z" />
+  <PathGeometry x:Key="NavigationDevicesIconGeometry"
+                Figures="M8.2,2.8 H15.8 C17.5,2.8 18.8,4.1 18.8,5.8 V18.2 C18.8,19.9 17.5,21.2 15.8,21.2 H8.2 C6.5,21.2 5.2,19.9 5.2,18.2 V5.8 C5.2,4.1 6.5,2.8 8.2,2.8 Z M9.7,5.6 H14.3 M10.6,18.5 H13.4" />
+  <PathGeometry x:Key="NavigationSettingsIconGeometry"
+                Figures="M3.5,6 H7.75 M12.25,6 H20.5 M10,3.75 C8.76,3.75 7.75,4.76 7.75,6 C7.75,7.24 8.76,8.25 10,8.25 C11.24,8.25 12.25,7.24 12.25,6 C12.25,4.76 11.24,3.75 10,3.75 Z M3.5,12 H12.75 M17.25,12 H20.5 M15,9.75 C13.76,9.75 12.75,10.76 12.75,12 C12.75,13.24 13.76,14.25 15,14.25 C16.24,14.25 17.25,13.24 17.25,12 C17.25,10.76 16.24,9.75 15,9.75 Z M3.5,18 H6.75 M11.25,18 H20.5 M9,15.75 C7.76,15.75 6.75,16.76 6.75,18 C6.75,19.24 7.76,20.25 9,20.25 C10.24,20.25 11.25,19.24 11.25,18 C11.25,16.76 10.24,15.75 9,15.75 Z" />
+
+  <PathGeometry x:Key="MinimizeIconGeometry" Figures="M5,12 H19" />
+  <PathGeometry x:Key="MaximizeIconGeometry"
+                Figures="M7.7,5.5 H16.3 C17.5,5.5 18.5,6.5 18.5,7.7 V16.3 C18.5,17.5 17.5,18.5 16.3,18.5 H7.7 C6.5,18.5 5.5,17.5 5.5,16.3 V7.7 C5.5,6.5 6.5,5.5 7.7,5.5 Z" />
+  <PathGeometry x:Key="RestoreIconGeometry"
+                Figures="M9.7,8 H16.8 C18,8 19,9 19,10.2 V17.3 C19,18.5 18,19.5 16.8,19.5 H9.7 C8.5,19.5 7.5,18.5 7.5,17.3 V10.2 C7.5,9 8.5,8 9.7,8 Z M5,15.5 V7.2 C5,5.7 6.2,4.5 7.7,4.5 H16" />
+  <PathGeometry x:Key="CloseIconGeometry" Figures="M6.5,6.5 L17.5,17.5 M17.5,6.5 L6.5,17.5" />
+  <PathGeometry x:Key="RefreshIconGeometry"
+                Figures="M19.7,12 C19.7,16.25 16.25,19.7 12,19.7 C7.75,19.7 4.3,16.25 4.3,12 C4.3,7.75 7.75,4.3 12,4.3 C14.55,4.3 16.8,5.55 18.2,7.45 M18.2,7.45 L18.45,3.9 M18.2,7.45 L21,6.65" />
+
+  <Style x:Key="RoundedButtonIconStyle" TargetType="Path">
+    <Setter Property="Fill" Value="{x:Null}" />
+    <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+    <Setter Property="StrokeEndLineCap" Value="Round" />
+    <Setter Property="StrokeLineJoin" Value="Round" />
+    <Setter Property="StrokeStartLineCap" Value="Round" />
+    <Setter Property="StrokeThickness" Value="2.45" />
+  </Style>
+</ResourceDictionary>

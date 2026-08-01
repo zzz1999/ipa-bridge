@@ -110,22 +110,62 @@
                     shell:WindowChrome.IsHitTestVisibleInChrome="True">
           <Button Style="{StaticResource TitleBarButtonStyle}"
                   AutomationProperties.Name="Minimize"
-                  FontFamily="{StaticResource AppFont}"
-                  FontSize="15"
-                  Content="—"
-                  Click="MinimizeButton_OnClick" />
-          <Button Style="{StaticResource TitleBarButtonStyle}"
-                  AutomationProperties.Name="Maximize or restore"
-                  FontFamily="{StaticResource AppFont}"
-                  FontSize="15"
-                  Content="□"
-                  Click="MaximizeButton_OnClick" />
+                  ToolTip="Minimize"
+                  Click="MinimizeButton_OnClick">
+            <Viewbox Width="18" Height="18" IsHitTestVisible="False">
+              <Grid Width="24" Height="24">
+                <Path Data="{StaticResource MinimizeIconGeometry}"
+                      Style="{StaticResource RoundedButtonIconStyle}"
+                      StrokeThickness="3.1" />
+              </Grid>
+            </Viewbox>
+          </Button>
+          <Button Click="MaximizeButton_OnClick">
+            <Button.Style>
+              <Style TargetType="Button" BasedOn="{StaticResource TitleBarButtonStyle}">
+                <Setter Property="AutomationProperties.Name" Value="Maximize" />
+                <Setter Property="ToolTip" Value="Maximize" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}"
+                               Value="Maximized">
+                    <Setter Property="AutomationProperties.Name" Value="Restore" />
+                    <Setter Property="ToolTip" Value="Restore" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </Button.Style>
+            <Viewbox Width="18" Height="18" IsHitTestVisible="False">
+              <Grid Width="24" Height="24">
+                <Path>
+                  <Path.Style>
+                    <Style TargetType="Path" BasedOn="{StaticResource RoundedButtonIconStyle}">
+                      <Setter Property="Data" Value="{StaticResource MaximizeIconGeometry}" />
+                      <Setter Property="StrokeThickness" Value="3.1" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}"
+                                     Value="Maximized">
+                          <Setter Property="Data" Value="{StaticResource RestoreIconGeometry}" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Path.Style>
+                </Path>
+              </Grid>
+            </Viewbox>
+          </Button>
           <Button Style="{StaticResource TitleBarButtonStyle}"
                   AutomationProperties.Name="Close"
-                  FontFamily="{StaticResource AppFont}"
-                  FontSize="17"
-                  Content="×"
-                  Click="CloseButton_OnClick" />
+                  Tag="Close"
+                  ToolTip="Close"
+                  Click="CloseButton_OnClick">
+            <Viewbox Width="18" Height="18" IsHitTestVisible="False">
+              <Grid Width="24" Height="24">
+                <Path Data="{StaticResource CloseIconGeometry}"
+                      Style="{StaticResource RoundedButtonIconStyle}"
+                      StrokeThickness="3.1" />
+              </Grid>
+            </Viewbox>
+          </Button>
         </StackPanel>
       </Grid>
 
@@ -167,20 +207,35 @@
                         <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                       </Grid.ColumnDefinitions>
-                      <Viewbox Width="22"
-                               Height="22"
+                      <Viewbox Width="24"
+                               Height="24"
                                HorizontalAlignment="Left"
-                               VerticalAlignment="Center">
-                        <Path Width="24"
-                              Height="24"
-                              Data="{Binding IconData}"
-                              Fill="Transparent"
-                              Stretch="Uniform"
-                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                              StrokeEndLineCap="Round"
-                              StrokeLineJoin="Round"
-                              StrokeStartLineCap="Round"
-                              StrokeThickness="2.25" />
+                               VerticalAlignment="Center"
+                               IsHitTestVisible="False">
+                        <Grid Width="24" Height="24">
+                          <Path>
+                            <Path.Style>
+                              <Style TargetType="Path" BasedOn="{StaticResource RoundedButtonIconStyle}">
+                                <Setter Property="Data" Value="{StaticResource NavigationOverviewIconGeometry}" />
+                                <Setter Property="StrokeThickness" Value="2.55" />
+                                <Style.Triggers>
+                                  <DataTrigger Binding="{Binding Page}" Value="{x:Static models:NavigationPage.Store}">
+                                    <Setter Property="Data" Value="{StaticResource NavigationStoreIconGeometry}" />
+                                  </DataTrigger>
+                                  <DataTrigger Binding="{Binding Page}" Value="{x:Static models:NavigationPage.Library}">
+                                    <Setter Property="Data" Value="{StaticResource NavigationLibraryIconGeometry}" />
+                                  </DataTrigger>
+                                  <DataTrigger Binding="{Binding Page}" Value="{x:Static models:NavigationPage.Devices}">
+                                    <Setter Property="Data" Value="{StaticResource NavigationDevicesIconGeometry}" />
+                                  </DataTrigger>
+                                  <DataTrigger Binding="{Binding Page}" Value="{x:Static models:NavigationPage.Settings}">
+                                    <Setter Property="Data" Value="{StaticResource NavigationSettingsIconGeometry}" />
+                                  </DataTrigger>
+                                </Style.Triggers>
+                              </Style>
+                            </Path.Style>
+                          </Path>
+                        </Grid>
                       </Viewbox>
                       <TextBlock Grid.Column="1"
                                  VerticalAlignment="Center"
@@ -256,18 +311,18 @@
                          Text="{Binding PageSubtitle}" />
             </StackPanel>
             <Button Grid.Column="1"
-                    AutomationProperties.Name="Refresh current page"
-                    Width="46"
-                    Height="46"
-                    MinHeight="46"
-                    Padding="0"
+                    AutomationProperties.Name="Refresh all statuses"
                     VerticalAlignment="Center"
-                    Style="{StaticResource GhostButtonStyle}"
-                    FontFamily="{StaticResource AppFont}"
-                    FontSize="20"
-                    Content="↻"
-                    ToolTip="Refresh all"
-                    Command="{Binding RefreshAllCommand}" />
+                    Style="{StaticResource RoundedIconButtonStyle}"
+                    ToolTip="Refresh all statuses"
+                    Command="{Binding RefreshAllCommand}">
+              <Viewbox Width="22" Height="22" IsHitTestVisible="False">
+                <Grid Width="24" Height="24">
+                  <Path Data="{StaticResource RefreshIconGeometry}"
+                        Style="{StaticResource RoundedButtonIconStyle}" />
+                </Grid>
+              </Viewbox>
+            </Button>
           </Grid>
 
           <ContentControl Grid.Row="1" Content="{Binding}">

@@ -61,17 +61,20 @@
         </StackPanel>
         <Button x:Name="CloseDialogButton"
                 Grid.Column="1"
-                Width="40"
-                Height="38"
-                MinHeight="38"
-                Padding="0"
                 AutomationProperties.Name="Close privacy information"
-                FontFamily="{StaticResource SymbolFont}"
-                FontSize="13"
-                Style="{StaticResource GhostButtonStyle}"
-                Content="&#xE711;"
+                Style="{StaticResource TitleBarButtonStyle}"
+                Tag="Close"
+                ToolTip="Close privacy information"
                 Click="CloseButton_OnClick"
-                shell:WindowChrome.IsHitTestVisibleInChrome="True" />
+                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+          <Viewbox Width="18" Height="18" IsHitTestVisible="False">
+            <Grid Width="24" Height="24">
+              <Path Data="{StaticResource CloseIconGeometry}"
+                    Style="{StaticResource RoundedButtonIconStyle}"
+                    StrokeThickness="3.1" />
+            </Grid>
+          </Viewbox>
+        </Button>
       </Grid>
 
       <ScrollViewer x:Name="PrivacyScrollViewer"
