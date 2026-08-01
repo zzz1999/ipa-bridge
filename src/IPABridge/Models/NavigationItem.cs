@@ -8,7 +8,7 @@ public sealed class NavigationItem : ObservableObject
 
     public required string Label { get; init; }
 
-    public required string Glyph { get; init; }
+    public required string IconData { get; init; }
 
     public required NavigationPage Page { get; init; }
 

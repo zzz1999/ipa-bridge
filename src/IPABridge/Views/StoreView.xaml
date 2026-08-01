@@ -24,7 +24,7 @@
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
           <TextBox x:Name="StoreSearchBox"
-                   Height="44"
+                   Height="48"
                    Text="{Binding Store.SearchQuery, UpdateSourceTrigger=PropertyChanged}">
             <TextBox.InputBindings>
               <KeyBinding Key="Enter" Command="{Binding Store.SearchCommand}" />
@@ -62,17 +62,17 @@
             <DataTemplate>
               <Grid>
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="54" />
+                  <ColumnDefinition Width="58" />
                   <ColumnDefinition Width="*" />
                   <ColumnDefinition Width="76" />
                 </Grid.ColumnDefinitions>
-                <Border Width="44"
-                        Height="44"
+                <Border Width="48"
+                        Height="48"
                         Background="{StaticResource HeroGradientBrush}"
-                        CornerRadius="12">
+                        CornerRadius="15">
                   <TextBlock HorizontalAlignment="Center"
                              VerticalAlignment="Center"
-                             FontSize="18"
+                             FontSize="20"
                              FontWeight="SemiBold"
                              Foreground="White"
                              Text="{Binding Monogram}" />
@@ -107,9 +107,9 @@
 
         <Border Grid.Row="3"
                 Margin="0,12,0,0"
-                Padding="15"
+                Padding="16"
                 Background="#EEF3FA"
-                CornerRadius="15"
+                CornerRadius="18"
                 Visibility="{Binding Store.SelectedApp, Converter={StaticResource NullToVisibilityConverter}}">
           <Grid>
             <Grid.RowDefinitions>
@@ -119,11 +119,11 @@
             </Grid.RowDefinitions>
 
             <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="12" />
-                <ColumnDefinition Width="Auto" />
-              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="10" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
               <StackPanel VerticalAlignment="Center">
                 <TextBlock FontSize="14"
                            FontWeight="SemiBold"
@@ -134,7 +134,9 @@
                            Text="{Binding Store.SelectedAccountSummary}"
                            TextTrimming="CharacterEllipsis" />
               </StackPanel>
-              <StackPanel Grid.Column="2" Orientation="Horizontal">
+              <StackPanel Grid.Row="2"
+                          HorizontalAlignment="Right"
+                          Orientation="Horizontal">
                 <Button Margin="0,0,8,0"
                         Style="{StaticResource SecondaryButtonStyle}"
                         Command="{Binding Store.LoadVersionsCommand}"
@@ -161,7 +163,7 @@
                         ToolTip="Downloads the latest version when no historical version is selected">
                 <ComboBox.ItemTemplate>
                   <DataTemplate>
-                    <Grid MinWidth="220" Margin="0,2">
+                    <Grid Margin="0,2">
                       <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -172,16 +174,19 @@
                       </Grid.ColumnDefinitions>
                       <TextBlock FontWeight="SemiBold"
                                  Foreground="{StaticResource TextPrimaryBrush}"
-                                 Text="{Binding VersionLabel}" />
+                                 Text="{Binding VersionLabel}"
+                                 TextTrimming="CharacterEllipsis" />
                       <TextBlock Grid.Column="1"
                                  Margin="12,0,0,0"
                                  Style="{StaticResource CaptionTextStyle}"
-                                 Text="{Binding ReleaseDateLabel}" />
+                                 Text="{Binding ReleaseDateLabel}"
+                                 TextTrimming="CharacterEllipsis" />
                       <TextBlock Grid.Row="1"
                                  Grid.ColumnSpan="2"
                                  Margin="0,3,0,0"
                                  Style="{StaticResource CaptionTextStyle}"
-                                 Text="{Binding IdentifierLabel}" />
+                                 Text="{Binding IdentifierLabel}"
+                                 TextTrimming="CharacterEllipsis" />
                     </Grid>
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
@@ -195,16 +200,16 @@
     <Border Grid.Column="2" Style="{StaticResource CardStyle}">
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel>
-          <Border Width="48"
-                  Height="48"
+          <Border Width="52"
+                  Height="52"
                   Margin="0,0,0,15"
                   HorizontalAlignment="Left"
                   Background="{StaticResource AccentSoftBrush}"
-                  CornerRadius="15">
+                  CornerRadius="18">
             <TextBlock HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        FontFamily="{StaticResource SymbolFont}"
-                       FontSize="20"
+                       FontSize="22"
                        Foreground="{StaticResource AccentBrush}"
                        Text="&#xE77B;" />
           </Border>
@@ -226,27 +231,48 @@
             <ComboBox x:Name="AppleAccountSelector"
                       AutomationProperties.HelpText="Selects the isolated Apple Account used for App Store search, license acquisition, and download"
                       AutomationProperties.Name="Apple Account for App Store operations"
-                      DisplayMemberPath="Email"
                       IsEnabled="{Binding Store.CanSelectAccount}"
                       IsTextSearchEnabled="True"
                       ItemsSource="{Binding Store.Accounts}"
                       SelectedItem="{Binding Store.SelectedAccount, Mode=OneWay}"
-                      SelectionChanged="AppleAccountSelector_OnSelectionChanged" />
+                      SelectionChanged="AppleAccountSelector_OnSelectionChanged"
+                      TextSearch.TextPath="Email">
+              <ComboBox.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Email}"
+                             TextTrimming="CharacterEllipsis"
+                             ToolTip="{Binding Email}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
             <Button x:Name="AddAppleAccountButton"
                     Grid.Column="2"
                     Width="44"
                     AutomationProperties.Name="Add Apple Account"
                     Command="{Binding Store.AddAccountCommand}"
-                    Content="&#xE710;"
-                    FontFamily="{StaticResource SymbolFont}"
                     Style="{StaticResource SecondaryButtonStyle}"
-                    ToolTip="Add Apple Account" />
+                    ToolTip="Add Apple Account">
+              <Canvas Width="16" Height="16">
+                <Rectangle Width="16"
+                           Height="3"
+                           Canvas.Top="6.5"
+                           Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                           RadiusX="1.5"
+                           RadiusY="1.5" />
+                <Rectangle Width="3"
+                           Height="16"
+                           Canvas.Left="6.5"
+                           Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                           RadiusX="1.5"
+                           RadiusY="1.5" />
+              </Canvas>
+            </Button>
           </Grid>
 
           <Border Margin="0,12,0,0"
-                  Padding="12"
+                  Padding="14"
                   Background="{StaticResource AccentSoftBrush}"
-                  CornerRadius="12">
+                  CornerRadius="16">
             <StackPanel>
               <TextBlock FontSize="12"
                          FontWeight="SemiBold"
@@ -268,9 +294,9 @@
                   Visibility="{Binding Store.SelectedAccount, Converter={StaticResource NullToVisibilityConverter}}" />
 
           <Border Margin="0,10,0,0"
-                  Padding="12"
+                  Padding="14"
                   Background="{StaticResource OrangeSoftBrush}"
-                  CornerRadius="12"
+                  CornerRadius="16"
                   Visibility="{Binding Store.IsRemoveConfirmationVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
             <StackPanel>
               <TextBlock Style="{StaticResource CaptionTextStyle}"
@@ -330,10 +356,12 @@
               <ColumnDefinition Width="8" />
               <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <Button Style="{StaticResource SecondaryButtonStyle}"
+            <Button Padding="16,11"
+                    Style="{StaticResource SecondaryButtonStyle}"
                     Command="{Binding Store.CheckAccountCommand}"
                     Content="Check Session" />
             <Button Grid.Column="2"
+                    Padding="16,11"
                     Style="{StaticResource PrimaryButtonStyle}"
                     Command="{Binding Store.LoginCommand}"
                     Content="{Binding Store.AccountActionLabel}" />
@@ -346,9 +374,9 @@
                   Visibility="{Binding Store.IsAddingAccount, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
           <Border Margin="0,18,0,0"
-                  Padding="13"
+                  Padding="14"
                   Background="{StaticResource GreenSoftBrush}"
-                  CornerRadius="13"
+                  CornerRadius="17"
                   Visibility="{Binding Store.IsLoggedIn, Converter={StaticResource BooleanToVisibilityConverter}}">
             <StackPanel Orientation="Horizontal">
               <TextBlock Margin="0,0,8,0"
@@ -366,9 +394,9 @@
 
           <Border x:Name="VerboseLoggingTip"
                   Margin="0,18,0,0"
-                  Padding="13"
+                  Padding="14"
                   Background="{StaticResource OrangeSoftBrush}"
-                  CornerRadius="13"
+                  CornerRadius="17"
                   Visibility="{Binding Store.IsVerboseLoggingTipVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Grid>
               <Grid.ColumnDefinitions>
@@ -381,8 +409,9 @@
                          TextWrapping="Wrap" />
               <Button x:Name="DismissVerboseLoggingTipButton"
                       Grid.Column="1"
-                      Width="28"
-                      Height="28"
+                      Width="30"
+                      Height="30"
+                      MinHeight="30"
                       Margin="8,-4,-4,0"
                       Padding="0"
                       VerticalAlignment="Top"
@@ -391,7 +420,7 @@
                       Command="{Binding Store.DismissVerboseLoggingTipCommand}"
                       Content="&#xE711;"
                       FontFamily="{StaticResource SymbolFont}"
-                      FontSize="10"
+                      FontSize="12"
                       Foreground="#9A5A12"
                       Style="{StaticResource GhostButtonStyle}"
                       ToolTip="Dismiss tip" />

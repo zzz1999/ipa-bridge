@@ -19,7 +19,8 @@
             <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Local IPAs" />
             <TextBlock Margin="0,4,0,0"
                        Style="{StaticResource BodyTextStyle}"
-                       Text="{Binding Library.StatusMessage}" />
+                       Text="{Binding Library.StatusMessage}"
+                       TextWrapping="Wrap" />
           </StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal">
             <Button Margin="0,0,8,0"
@@ -30,7 +31,9 @@
                     Style="{StaticResource SecondaryButtonStyle}"
                     Click="ChooseExternalIpa_OnClick"
                     Content="Choose Another IPA" />
-            <Button Width="42"
+            <Button Width="46"
+                    Height="46"
+                    MinHeight="46"
                     AutomationProperties.Name="Refresh IPA library"
                     Padding="0"
                     Style="{StaticResource GhostButtonStyle}"
@@ -47,19 +50,19 @@
             <DataTemplate>
               <Grid>
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="58" />
+                  <ColumnDefinition Width="62" />
                   <ColumnDefinition Width="*" />
                   <ColumnDefinition Width="150" />
-                  <ColumnDefinition Width="115" />
+                  <ColumnDefinition Width="145" />
                 </Grid.ColumnDefinitions>
-                <Border Width="46"
-                        Height="46"
+                <Border Width="50"
+                        Height="50"
                         Background="#E9E5FF"
-                        CornerRadius="13">
+                        CornerRadius="16">
                   <TextBlock HorizontalAlignment="Center"
                              VerticalAlignment="Center"
                              FontFamily="{StaticResource SymbolFont}"
-                             FontSize="19"
+                             FontSize="21"
                              Foreground="{StaticResource PurpleBrush}"
                              Text="&#xE8B7;" />
                 </Border>
@@ -92,9 +95,9 @@
 
         <Border Grid.Row="2"
                 Margin="0,14,0,0"
-                Padding="14"
+                Padding="16"
                 Background="#EEF3FA"
-                CornerRadius="14">
+                CornerRadius="18">
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" />
@@ -102,7 +105,7 @@
             </Grid.ColumnDefinitions>
             <TextBlock Margin="0,0,10,0"
                        FontFamily="{StaticResource SymbolFont}"
-                       FontSize="15"
+                       FontSize="17"
                        Foreground="{StaticResource AccentBrush}"
                        Text="&#xE946;" />
             <TextBlock Grid.Column="1"

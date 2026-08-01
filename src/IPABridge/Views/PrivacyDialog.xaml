@@ -19,7 +19,7 @@
         PreviewKeyDown="PrivacyDialog_OnPreviewKeyDown">
   <shell:WindowChrome.WindowChrome>
     <shell:WindowChrome CaptionHeight="58"
-                        CornerRadius="20"
+                        CornerRadius="24"
                         GlassFrameThickness="0"
                         ResizeBorderThickness="0"
                         UseAeroCaptionButtons="False" />
@@ -27,8 +27,8 @@
 
   <Border Background="#F8FAFE"
           BorderBrush="#BFFFFFFF"
-          BorderThickness="1"
-          CornerRadius="20">
+          BorderThickness="1.5"
+          CornerRadius="24">
     <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="58" />
@@ -42,31 +42,32 @@
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
         <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
-          <Border Width="32"
-                  Height="32"
+          <Border Width="36"
+                  Height="36"
                   Background="{StaticResource AccentSoftBrush}"
-                  CornerRadius="10">
+                  CornerRadius="12">
             <TextBlock HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        FontFamily="{StaticResource SymbolFont}"
-                       FontSize="15"
+                       FontSize="17"
                        Foreground="{StaticResource AccentBrush}"
                        Text="&#xE72E;" />
           </Border>
           <TextBlock Margin="11,0,0,0"
                      VerticalAlignment="Center"
-                     FontSize="17"
-                     FontWeight="SemiBold"
+                     FontSize="18"
+                     FontWeight="Bold"
                      Text="Privacy &amp; Local Encryption" />
         </StackPanel>
         <Button x:Name="CloseDialogButton"
                 Grid.Column="1"
-                Width="38"
-                Height="34"
+                Width="40"
+                Height="38"
+                MinHeight="38"
                 Padding="0"
                 AutomationProperties.Name="Close privacy information"
                 FontFamily="{StaticResource SymbolFont}"
-                FontSize="11"
+                FontSize="13"
                 Style="{StaticResource GhostButtonStyle}"
                 Content="&#xE711;"
                 Click="CloseButton_OnClick"
@@ -83,8 +84,8 @@
                     PanningMode="VerticalOnly"
                     VerticalScrollBarVisibility="Auto">
         <StackPanel>
-          <TextBlock FontSize="25"
-                     FontWeight="SemiBold"
+          <TextBlock FontSize="27"
+                     FontWeight="Bold"
                      Text="Your settings stay under your control" />
           <TextBlock Margin="0,7,0,17"
                      Style="{StaticResource BodyTextStyle}"
@@ -142,9 +143,9 @@
           </Border>
 
           <Border Margin="0,0,0,10"
-                  Padding="16"
+                  Padding="18"
                   Background="{StaticResource OrangeSoftBrush}"
-                  CornerRadius="15">
+                  CornerRadius="18">
             <TextBlock Style="{StaticResource BodyTextStyle}"
                        Foreground="#98530C"
                        TextWrapping="Wrap"
@@ -162,9 +163,9 @@
               Padding="22,13"
               Background="#EFFFFFFF"
               BorderBrush="{StaticResource DividerBrush}"
-              BorderThickness="0,1,0,0">
+              BorderThickness="0,1.5,0,0">
         <Button x:Name="DoneButton"
-                MinWidth="110"
+                MinWidth="120"
                 HorizontalAlignment="Right"
                 AutomationProperties.Name="Close privacy information"
                 Content="Done"

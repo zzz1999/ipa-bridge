@@ -4,19 +4,19 @@
   <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="0,0,8,18">
       <Border Margin="0,0,0,13"
-              Padding="15"
+              Padding="17"
               Background="{StaticResource OrangeSoftBrush}"
-              CornerRadius="15"
+              CornerRadius="20"
               Visibility="{Binding Devices.HasAppleDeviceSupport, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
         <Grid>
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="34" />
+            <ColumnDefinition Width="38" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
           <TextBlock VerticalAlignment="Center"
                      FontFamily="{StaticResource SymbolFont}"
-                     FontSize="17"
+                     FontSize="20"
                      Foreground="{StaticResource OrangeBrush}"
                      Text="&#xE7BA;" />
           <StackPanel Grid.Column="1">
@@ -45,19 +45,19 @@
       </Border>
 
       <Border Margin="0,0,0,13"
-              Padding="15"
+              Padding="17"
               Background="{StaticResource AccentSoftBrush}"
-              CornerRadius="15"
+              CornerRadius="20"
               Visibility="{Binding Devices.AreDeviceToolsAvailable, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
         <Grid>
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="34" />
+            <ColumnDefinition Width="38" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
           <TextBlock VerticalAlignment="Center"
                      FontFamily="{StaticResource SymbolFont}"
-                     FontSize="17"
+                     FontSize="20"
                      Foreground="{StaticResource AccentBrush}"
                      Text="&#xE896;" />
           <StackPanel Grid.Column="1">
@@ -102,12 +102,13 @@
               </StackPanel>
               <Button Grid.Column="1"
                       AutomationProperties.Name="Refresh devices"
-                      Width="40"
-                      Height="40"
+                      Width="46"
+                      Height="46"
+                      MinHeight="46"
                       Padding="0"
                       Style="{StaticResource GhostButtonStyle}"
                       FontFamily="{StaticResource AppFont}"
-                      FontSize="18"
+                      FontSize="20"
                       Content="↻"
                       Command="{Binding Devices.RefreshCommand}" />
             </Grid>
@@ -124,14 +125,14 @@
                       <ColumnDefinition Width="50" />
                       <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="39"
-                            Height="48"
+                    <Border Width="42"
+                            Height="52"
                             BorderBrush="#9CB6D9"
-                            BorderThickness="2"
-                            CornerRadius="9">
+                            BorderThickness="3"
+                            CornerRadius="11">
                       <Grid>
                         <Border Width="15"
-                                Height="3"
+                                Height="4"
                                 Margin="0,4,0,0"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Top"
@@ -168,9 +169,9 @@
             </ListBox>
 
             <Border Grid.Row="2"
-                    Padding="12"
+                    Padding="14"
                     Background="#EEF3FA"
-                    CornerRadius="13"
+                    CornerRadius="17"
                     Visibility="{Binding Devices.SelectedDevice, Converter={StaticResource NullToVisibilityConverter}}">
               <Grid>
                 <Grid.ColumnDefinitions>
@@ -204,13 +205,14 @@
                 <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Install IPA" />
                 <TextBlock Margin="0,4,0,0"
                            Style="{StaticResource BodyTextStyle}"
-                           Text="Choose a file and target device. The iOS installation service determines the result." />
+                           Text="Choose a file and target device. The iOS installation service determines the result."
+                           TextWrapping="Wrap" />
               </StackPanel>
               <Border Grid.Column="1"
-                      Padding="11,5"
+                      Padding="13,7"
                       VerticalAlignment="Top"
                       Background="{StaticResource SurfaceMutedBrush}"
-                      CornerRadius="10">
+                      CornerRadius="14">
                 <TextBlock Style="{StaticResource CaptionTextStyle}"
                            Text="{Binding Devices.DeviceToolsLabel}" />
               </Border>
@@ -233,11 +235,11 @@
             </Grid>
 
             <TextBlock Margin="2,19,0,7" Style="{StaticResource CaptionTextStyle}" Text="Target device" />
-            <Border Padding="14"
+            <Border Padding="15"
                     Background="#F2F5F9"
                     BorderBrush="{StaticResource DividerBrush}"
-                    BorderThickness="1"
-                    CornerRadius="13">
+                    BorderThickness="1.5"
+                    CornerRadius="17">
               <Grid>
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*" />
@@ -249,14 +251,22 @@
                              Text="{Binding Devices.SelectedDevice.Name, TargetNullValue='No device selected'}" />
                   <TextBlock Margin="0,3,0,0"
                              Style="{StaticResource CaptionTextStyle}"
-                             Text="{Binding Devices.SelectedDevice.ConnectionType, TargetNullValue='Connect a device to choose a target'}" />
+                             Text="{Binding Devices.SelectedDevice.ConnectionType, TargetNullValue='Connect a device to choose a target'}"
+                             TextWrapping="Wrap" />
                 </StackPanel>
-                <TextBlock Grid.Column="1"
-                           VerticalAlignment="Center"
-                           FontFamily="{StaticResource SymbolFont}"
-                           FontSize="18"
-                           Foreground="{StaticResource AccentBrush}"
-                           Text="&#xE8B2;" />
+                <Viewbox Grid.Column="1"
+                         Width="22"
+                         Height="22"
+                         Margin="12,0,0,0"
+                         VerticalAlignment="Center">
+                  <Path Data="M7,2 H17 A2,2 0 0 1 19,4 V20 A2,2 0 0 1 17,22 H7 A2,2 0 0 1 5,20 V4 A2,2 0 0 1 7,2 Z M10,5 H14 M11,19 H13"
+                        Fill="Transparent"
+                        Stroke="{StaticResource AccentBrush}"
+                        StrokeEndLineCap="Round"
+                        StrokeLineJoin="Round"
+                        StrokeStartLineCap="Round"
+                        StrokeThickness="2.25" />
+                </Viewbox>
               </Grid>
             </Border>
 
@@ -270,12 +280,13 @@
               </Grid>
               <ProgressBar Value="{Binding Devices.InstallationProgress, Mode=OneWay}" Maximum="1" />
               <Border Margin="0,12,0,0"
-                      Padding="10"
+                      Padding="12"
                       Background="#182033"
-                      CornerRadius="10">
+                      CornerRadius="14">
                 <TextBlock MaxHeight="92"
                            FontFamily="Cascadia Mono, Consolas"
-                           FontSize="10"
+                           FontSize="11"
+                           FontWeight="Medium"
                            Foreground="#D5E2F5"
                            Text="{Binding Devices.InstallationLog}"
                            TextWrapping="Wrap" />
@@ -288,7 +299,8 @@
                 <ColumnDefinition Width="10" />
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
-              <Button Height="44"
+              <Button Height="48"
+                      MinHeight="48"
                       Style="{StaticResource PrimaryButtonStyle}"
                       Command="{Binding Devices.InstallCommand}"
                       Content="Install on Device" />
@@ -303,18 +315,18 @@
       </Grid>
 
       <Border Margin="0,15,0,0"
-              Padding="15"
+              Padding="17"
               Background="#BFFFFFFF"
               BorderBrush="#99FFFFFF"
-              BorderThickness="1"
-              CornerRadius="16">
+              BorderThickness="1.5"
+              CornerRadius="20">
         <Grid>
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="32" />
+          <ColumnDefinition Width="36" />
             <ColumnDefinition Width="*" />
           </Grid.ColumnDefinitions>
           <TextBlock FontFamily="{StaticResource SymbolFont}"
-                     FontSize="16"
+                     FontSize="18"
                      Foreground="{StaticResource TextSecondaryBrush}"
                      Text="&#xE9D9;" />
           <TextBlock Grid.Column="1"

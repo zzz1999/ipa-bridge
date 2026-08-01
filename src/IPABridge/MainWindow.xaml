@@ -10,8 +10,8 @@
         Icon="pack://application:,,,/Assets/IPA-Bridge.ico"
         Width="1120"
         Height="670"
-        MinWidth="960"
-        MinHeight="580"
+        MinWidth="1100"
+        MinHeight="620"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResize"
@@ -20,8 +20,8 @@
         SnapsToDevicePixels="True"
         mc:Ignorable="d">
   <shell:WindowChrome.WindowChrome>
-    <shell:WindowChrome CaptionHeight="54"
-                        CornerRadius="18"
+    <shell:WindowChrome CaptionHeight="58"
+                        CornerRadius="24"
                         GlassFrameThickness="0"
                         ResizeBorderThickness="7"
                         UseAeroCaptionButtons="False" />
@@ -47,11 +47,11 @@
 
   <Border Background="#BFF7F9FD"
           BorderBrush="#99FFFFFF"
-          BorderThickness="1"
-          CornerRadius="18">
+          BorderThickness="1.5"
+          CornerRadius="24">
     <Grid>
       <Grid.RowDefinitions>
-        <RowDefinition Height="54" />
+        <RowDefinition Height="58" />
         <RowDefinition Height="*" />
       </Grid.RowDefinitions>
 
@@ -67,17 +67,17 @@
                     VerticalAlignment="Center"
                     Orientation="Horizontal">
           <Image x:Name="BrandIconImage"
-                 Width="31"
-                 Height="31"
+                 Width="34"
+                 Height="34"
                  AutomationProperties.Name="IPA Bridge icon"
                  RenderOptions.BitmapScalingMode="HighQuality"
                  Source="pack://application:,,,/Assets/IPA-Bridge.png"
                  Stretch="Uniform"
                  SnapsToDevicePixels="True" />
-          <TextBlock Margin="10,0,0,0"
+          <TextBlock Margin="11,0,0,0"
                      VerticalAlignment="Center"
-                     FontSize="15"
-                     FontWeight="SemiBold"
+                     FontSize="16"
+                     FontWeight="Bold"
                      Text="IPA Bridge" />
         </StackPanel>
 
@@ -85,18 +85,19 @@
                 HorizontalAlignment="Right"
                 VerticalAlignment="Center"
                 Margin="0,0,12,0"
-                Padding="11,5"
+                Padding="13,7"
                 Background="#A8FFFFFF"
                 BorderBrush="#88FFFFFF"
-                BorderThickness="1"
-                CornerRadius="11">
+                BorderThickness="1.5"
+                CornerRadius="15">
           <StackPanel Orientation="Horizontal">
-            <Ellipse Width="7"
-                     Height="7"
-                     Margin="0,0,7,0"
+            <Ellipse Width="8"
+                     Height="8"
+                     Margin="0,0,8,0"
                      VerticalAlignment="Center"
                      Fill="{StaticResource GreenBrush}" />
-            <TextBlock FontSize="11"
+            <TextBlock FontSize="12"
+                       FontWeight="SemiBold"
                        Foreground="{StaticResource TextSecondaryBrush}"
                        Text="{Binding OverallReadiness}" />
           </StackPanel>
@@ -136,11 +137,11 @@
 
         <Border Grid.Column="0"
                 Margin="12,0,0,12"
-                Padding="11,18"
+                Padding="13,20"
                 Background="#8CFFFFFF"
                 BorderBrush="#8FFFFFFF"
-                BorderThickness="1"
-                CornerRadius="17">
+                BorderThickness="1.5"
+                CornerRadius="22">
           <Grid>
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
@@ -163,14 +164,24 @@
                           CommandParameter="{Binding Page}">
                     <Grid>
                       <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="29" />
+                        <ColumnDefinition Width="32" />
                         <ColumnDefinition Width="*" />
                       </Grid.ColumnDefinitions>
-                      <TextBlock VerticalAlignment="Center"
-                                 FontFamily="{StaticResource SymbolFont}"
-                                 FontSize="15"
-                                 Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                                 Text="{Binding Glyph}" />
+                      <Viewbox Width="22"
+                               Height="22"
+                               HorizontalAlignment="Left"
+                               VerticalAlignment="Center">
+                        <Path Width="24"
+                              Height="24"
+                              Data="{Binding IconData}"
+                              Fill="Transparent"
+                              Stretch="Uniform"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeEndLineCap="Round"
+                              StrokeLineJoin="Round"
+                              StrokeStartLineCap="Round"
+                              StrokeThickness="2.25" />
+                      </Viewbox>
                       <TextBlock Grid.Column="1"
                                  VerticalAlignment="Center"
                                  Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
@@ -191,24 +202,24 @@
                     Click="PrivacyCardButton_OnClick">
               <Grid>
                 <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="28" />
+                  <ColumnDefinition Width="34" />
                   <ColumnDefinition Width="*" />
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Border Width="25"
-                        Height="25"
+                <Border Width="30"
+                        Height="30"
                         VerticalAlignment="Top"
                         Background="{StaticResource AccentSoftBrush}"
-                        CornerRadius="8">
+                        CornerRadius="10">
                   <TextBlock HorizontalAlignment="Center"
                              VerticalAlignment="Center"
                              FontFamily="{StaticResource SymbolFont}"
-                             FontSize="12"
+                             FontSize="14"
                              Foreground="{StaticResource AccentBrush}"
                              Text="&#xE72E;" />
                 </Border>
                 <StackPanel Grid.Column="1" Margin="8,0,6,0">
-                  <TextBlock FontSize="12"
+                  <TextBlock FontSize="13"
                              FontWeight="SemiBold"
                              Text="Privacy by design" />
                   <TextBlock Margin="0,4,0,0"
@@ -219,7 +230,7 @@
                 <TextBlock Grid.Column="2"
                            VerticalAlignment="Center"
                            FontFamily="{StaticResource SymbolFont}"
-                           FontSize="10"
+                           FontSize="12"
                            Foreground="{StaticResource TextTertiaryBrush}"
                            Text="&#xE76C;" />
               </Grid>
@@ -229,7 +240,7 @@
 
         <Grid Grid.Column="1" Margin="30,12,30,24">
           <Grid.RowDefinitions>
-            <RowDefinition Height="76" />
+            <RowDefinition Height="82" />
             <RowDefinition Height="*" />
           </Grid.RowDefinitions>
 
@@ -246,13 +257,14 @@
             </StackPanel>
             <Button Grid.Column="1"
                     AutomationProperties.Name="Refresh current page"
-                    Width="40"
-                    Height="40"
+                    Width="46"
+                    Height="46"
+                    MinHeight="46"
                     Padding="0"
                     VerticalAlignment="Center"
                     Style="{StaticResource GhostButtonStyle}"
                     FontFamily="{StaticResource AppFont}"
-                    FontSize="18"
+                    FontSize="20"
                     Content="↻"
                     ToolTip="Refresh all"
                     Command="{Binding RefreshAllCommand}" />

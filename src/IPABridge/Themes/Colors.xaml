@@ -5,8 +5,8 @@
   <Color x:Key="SurfaceStrongColor">#FFFFFFFF</Color>
   <Color x:Key="SurfaceMutedColor">#EAF0F7</Color>
   <Color x:Key="TextPrimaryColor">#172033</Color>
-  <Color x:Key="TextSecondaryColor">#667085</Color>
-  <Color x:Key="TextTertiaryColor">#98A2B3</Color>
+  <Color x:Key="TextSecondaryColor">#596579</Color>
+  <Color x:Key="TextTertiaryColor">#7E8AA0</Color>
   <Color x:Key="AccentColor">#1677FF</Color>
   <Color x:Key="AccentDarkColor">#075FD2</Color>
   <Color x:Key="AccentSoftColor">#DCEBFF</Color>
@@ -18,7 +18,7 @@
   <Color x:Key="OrangeSoftColor">#FFF0D9</Color>
   <Color x:Key="RedColor">#E5484D</Color>
   <Color x:Key="RedSoftColor">#FFE5E7</Color>
-  <Color x:Key="DividerColor">#DDE3EC</Color>
+  <Color x:Key="DividerColor">#CBD6E5</Color>
   <Color x:Key="OverlayColor">#33FFFFFF</Color>
 
   <SolidColorBrush x:Key="AppBackgroundBrush" Color="{StaticResource AppBackgroundColor}" />

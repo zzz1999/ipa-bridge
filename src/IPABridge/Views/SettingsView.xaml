@@ -14,15 +14,14 @@
           <StackPanel>
             <Grid>
               <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="48" />
+                <ColumnDefinition Width="52" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
-              <Border Width="40" Height="40" Background="{StaticResource AccentSoftBrush}" CornerRadius="12">
+              <Border Width="44" Height="44" Background="{StaticResource AccentSoftBrush}" CornerRadius="15">
                 <TextBlock HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            FontFamily="{StaticResource SymbolFont}"
-                           FontSize="17"
+                           FontSize="19"
                            Foreground="{StaticResource AccentBrush}"
                            Text="&#xE896;" />
               </Border>
@@ -32,13 +31,15 @@
                            Style="{StaticResource CaptionTextStyle}"
                            Text="{Binding Settings.IpatoolStatus}" />
               </StackPanel>
-              <Button Grid.Column="2"
-                      Style="{StaticResource PrimaryButtonStyle}"
-                      Command="{Binding Settings.InstallIpatoolCommand}"
-                      Content="Install / Update" />
             </Grid>
 
-            <TextBlock Margin="2,19,0,7" Style="{StaticResource CaptionTextStyle}" Text="ipatool.exe path" />
+            <Button Margin="0,16,0,0"
+                    HorizontalAlignment="Stretch"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Command="{Binding Settings.InstallIpatoolCommand}"
+                    Content="Install / Update" />
+
+            <TextBlock Margin="2,16,0,7" Style="{StaticResource CaptionTextStyle}" Text="ipatool.exe path" />
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -65,15 +66,14 @@
           <StackPanel>
             <Grid>
               <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="48" />
+                <ColumnDefinition Width="52" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
-              <Border Width="40" Height="40" Background="#E9E5FF" CornerRadius="12">
+              <Border Width="44" Height="44" Background="#E9E5FF" CornerRadius="15">
                 <TextBlock HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            FontFamily="{StaticResource SymbolFont}"
-                           FontSize="17"
+                           FontSize="19"
                            Foreground="{StaticResource PurpleBrush}"
                            Text="&#xE8B2;" />
               </Border>
@@ -83,13 +83,15 @@
                            Style="{StaticResource CaptionTextStyle}"
                            Text="{Binding Settings.DeviceToolsStatus}" />
               </StackPanel>
-              <Button Grid.Column="2"
-                      Style="{StaticResource PrimaryButtonStyle}"
-                      Command="{Binding Settings.InstallDeviceToolsCommand}"
-                      Content="Install Pinned Release" />
             </Grid>
 
-            <TextBlock Margin="2,19,0,7" Style="{StaticResource CaptionTextStyle}" Text="Device tools folder" />
+            <Button Margin="0,16,0,0"
+                    HorizontalAlignment="Stretch"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Command="{Binding Settings.InstallDeviceToolsCommand}"
+                    Content="Install Pinned Release" />
+
+            <TextBlock Margin="2,16,0,7" Style="{StaticResource CaptionTextStyle}" Text="Device tools folder" />
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -125,15 +127,15 @@
 
           <Grid>
             <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="48" />
+              <ColumnDefinition Width="52" />
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <Border Width="40" Height="40" Background="{StaticResource GreenSoftBrush}" CornerRadius="12">
+            <Border Width="44" Height="44" Background="{StaticResource GreenSoftBrush}" CornerRadius="15">
               <TextBlock HorizontalAlignment="Center"
                          VerticalAlignment="Center"
                          FontFamily="{StaticResource SymbolFont}"
-                         FontSize="17"
+                         FontSize="19"
                          Foreground="{StaticResource GreenBrush}"
                          Text="&#xE7BA;" />
             </Border>
@@ -163,7 +165,7 @@
               <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Border Padding="13" Background="#F4F6FA" CornerRadius="13">
+            <Border Padding="14" Background="#F4F6FA" CornerRadius="17">
               <StackPanel>
                 <TextBlock Style="{StaticResource CaptionTextStyle}" Text="Apple Devices app" />
                 <TextBlock Margin="0,4,0,0"
@@ -174,7 +176,7 @@
               </StackPanel>
             </Border>
 
-            <Border Grid.Column="2" Padding="13" Background="#F4F6FA" CornerRadius="13">
+            <Border Grid.Column="2" Padding="14" Background="#F4F6FA" CornerRadius="17">
               <StackPanel>
                 <TextBlock Style="{StaticResource CaptionTextStyle}" Text="Apple USB driver" />
                 <TextBlock Margin="0,4,0,0"
@@ -185,7 +187,7 @@
               </StackPanel>
             </Border>
 
-            <Border Grid.Column="4" Padding="13" Background="#F4F6FA" CornerRadius="13">
+            <Border Grid.Column="4" Padding="14" Background="#F4F6FA" CornerRadius="17">
               <StackPanel>
                 <TextBlock Style="{StaticResource CaptionTextStyle}" Text="Verified device transport" />
                 <TextBlock Margin="0,4,0,0"
