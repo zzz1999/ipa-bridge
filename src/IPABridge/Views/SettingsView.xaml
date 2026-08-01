@@ -224,7 +224,7 @@
           <TextBlock Style="{StaticResource SectionTitleStyle}" Text="Local Preferences" />
           <TextBlock Margin="0,4,0,18"
                      Style="{StaticResource BodyTextStyle}"
-                     Text="Only paths, the email address, and refresh preferences are written to the settings file." />
+                     Text="Paths and refresh preferences are saved here. Manage encrypted Apple Account profiles from the App Store page." />
 
           <Grid>
             <Grid.ColumnDefinitions>
@@ -241,16 +241,6 @@
                     Style="{StaticResource SecondaryButtonStyle}"
                     Click="ChooseDownloadDirectory_OnClick"
                     Content="Choose…" />
-          </Grid>
-
-          <Grid Margin="0,13,0,0">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="150" />
-              <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="Apple Account email" />
-            <TextBox Grid.Column="1"
-                     Text="{Binding Settings.AppleAccountEmail, UpdateSourceTrigger=PropertyChanged}" />
           </Grid>
 
           <Grid Margin="0,18,0,0">

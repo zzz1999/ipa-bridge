@@ -97,7 +97,7 @@
               <TextBlock Margin="0,5,0,0"
                          Style="{StaticResource BodyTextStyle}"
                          TextWrapping="Wrap"
-                         Text="IPA Bridge stores its settings in your Windows user profile. It does not save these settings to an IPA Bridge account or an IPA Bridge-operated cloud service." />
+                         Text="IPA Bridge stores paths, preferences, saved Apple Account email profiles, and the selected profile in your Windows user profile. It does not save these settings to an IPA Bridge account or an IPA Bridge-operated cloud service." />
             </StackPanel>
           </Border>
 
@@ -117,7 +117,7 @@
               <TextBlock Margin="0,5,0,0"
                          Style="{StaticResource BodyTextStyle}"
                          TextWrapping="Wrap"
-                         Text="IPA Bridge does not save your Apple Account password, two-factor verification code, or ipatool vault passphrase. These values are supplied to the official ipatool process through a local Windows pseudoconsole only when required. ipatool communicates with Apple services and manages its own credential store." />
+                         Text="IPA Bridge does not save your Apple Account password, two-factor verification code, or ipatool vault passphrase in its settings. These values are supplied to the official ipatool process through a local Windows pseudoconsole only when required. Each saved profile receives a separate local ipatool home so its account record, cookies, and Apple storefront do not overlap another profile." />
             </StackPanel>
           </Border>
 
@@ -127,7 +127,7 @@
               <TextBlock Margin="0,5,0,0"
                          Style="{StaticResource BodyTextStyle}"
                          TextWrapping="Wrap"
-                         Text="Downloaded IPA files, files in folders you select, and information stored independently by ipatool, Apple Devices, Windows, or other tools are not protected by IPA Bridge's settings encryption." />
+                         Text="Downloaded IPA files, files in folders you select, and ipatool's own account sessions are not protected by IPA Bridge's settings key. ipatool encrypts its account record with the vault passphrase; its isolated cookie file relies on access controls for your Windows user profile." />
             </StackPanel>
           </Border>
 

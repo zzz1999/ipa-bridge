@@ -16,9 +16,12 @@ public sealed class ConfigurationService
 
     private static readonly HashSet<string> LegacyPropertyNames =
     [
+        nameof(AppConfiguration.SchemaVersion),
         nameof(AppConfiguration.IpatoolPath),
         nameof(AppConfiguration.DeviceToolsDirectory),
         nameof(AppConfiguration.DownloadDirectory),
+        nameof(AppConfiguration.AppleAccounts),
+        nameof(AppConfiguration.SelectedAppleAccountId),
         nameof(AppConfiguration.AppleAccountEmail),
         nameof(AppConfiguration.AutomaticallyRefreshDevices)
     ];
@@ -104,11 +107,16 @@ public sealed class ConfigurationService
             EnsureDirectories();
             if (File.Exists(_configurationFile))
             {
-                Current = await LoadEncryptedConfigurationAsync();
+                var encryptedResult = await LoadEncryptedConfigurationAsync();
+                Current = encryptedResult.Configuration;
                 if (File.Exists(_legacyConfigurationFile))
                 {
-                    var legacyConfiguration = await LoadLegacyConfigurationAsync();
-                    if (!ConfigurationsMatch(Current, legacyConfiguration))
+                    var legacyResult = await LoadLegacyConfigurationAsync();
+                    if (!ConfigurationsMatch(
+                            Current,
+                            legacyResult.Configuration,
+                            encryptedResult.MigratedLegacyAccount ||
+                            legacyResult.MigratedLegacyAccount))
                     {
                         throw new InvalidDataException(
                             "Encrypted and legacy settings both exist with different values. " +
@@ -117,15 +125,24 @@ public sealed class ConfigurationService
 
                     File.Delete(_legacyConfigurationFile);
                 }
+
+                if (encryptedResult.RequiresRewrite)
+                {
+                    await SaveCoreAsync(allowKeyCreation: false);
+                }
             }
             else if (File.Exists(_legacyConfigurationFile))
             {
-                Current = await LoadLegacyConfigurationAsync();
+                Current = (await LoadLegacyConfigurationAsync()).Configuration;
                 await _dataProtectionService.EnsureKeyExistsAsync();
                 await SaveCoreAsync(allowKeyCreation: true);
 
-                var verifiedConfiguration = await LoadEncryptedConfigurationAsync();
-                if (!ConfigurationsMatch(Current, verifiedConfiguration))
+                var verifiedConfiguration =
+                    (await LoadEncryptedConfigurationAsync()).Configuration;
+                if (!ConfigurationsMatch(
+                        Current,
+                        verifiedConfiguration,
+                        allowDifferentProfileIds: false))
                 {
                     throw new InvalidDataException(
                         "The encrypted settings migration could not be verified. The legacy settings were preserved.");
@@ -177,6 +194,7 @@ public sealed class ConfigurationService
 
     private async Task SaveCoreAsync(bool allowKeyCreation)
     {
+        _ = NormalizeConfiguration(Current, "current");
         var plaintext = JsonSerializer.SerializeToUtf8Bytes(Current, SerializerOptions);
         byte[]? encryptedEnvelope = null;
         try
@@ -199,7 +217,7 @@ public sealed class ConfigurationService
         }
     }
 
-    private async Task<AppConfiguration> LoadEncryptedConfigurationAsync()
+    private async Task<ConfigurationReadResult> LoadEncryptedConfigurationAsync()
     {
         var encryptedEnvelope = await File.ReadAllBytesAsync(_configurationFile);
         byte[]? plaintext = null;
@@ -218,7 +236,7 @@ public sealed class ConfigurationService
         }
     }
 
-    private async Task<AppConfiguration> LoadLegacyConfigurationAsync()
+    private async Task<ConfigurationReadResult> LoadLegacyConfigurationAsync()
     {
         var plaintext = await File.ReadAllBytesAsync(_legacyConfigurationFile);
         try
@@ -247,11 +265,16 @@ public sealed class ConfigurationService
         }
     }
 
-    private AppConfiguration DeserializeConfiguration(byte[] plaintext, string sourceDescription)
+    private ConfigurationReadResult DeserializeConfiguration(
+        byte[] plaintext,
+        string sourceDescription)
     {
         AppConfiguration configuration;
+        var hasCurrentSchemaShape = false;
         try
         {
+            using var document = JsonDocument.Parse(plaintext);
+            hasCurrentSchemaShape = HasCurrentSchemaShape(document.RootElement);
             configuration = JsonSerializer.Deserialize<AppConfiguration>(plaintext, SerializerOptions)
                             ?? throw new InvalidDataException(
                                 $"The {sourceDescription} settings file is empty.");
@@ -268,7 +291,178 @@ public sealed class ConfigurationService
             configuration.DownloadDirectory = _defaultDownloadDirectory;
         }
 
-        return configuration;
+        var normalization = NormalizeConfiguration(configuration, sourceDescription);
+        return new ConfigurationReadResult(
+            configuration,
+            !hasCurrentSchemaShape || normalization.Changed,
+            normalization.MigratedLegacyAccount);
+    }
+
+    private static bool HasCurrentSchemaShape(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty(nameof(AppConfiguration.SchemaVersion), out var schemaVersion) ||
+            schemaVersion.ValueKind != JsonValueKind.Number ||
+            !schemaVersion.TryGetInt32(out var version) ||
+            version != AppConfiguration.CurrentSchemaVersion ||
+            !root.TryGetProperty(nameof(AppConfiguration.AppleAccounts), out var profiles) ||
+            profiles.ValueKind != JsonValueKind.Array ||
+            !root.TryGetProperty(nameof(AppConfiguration.SelectedAppleAccountId), out var selectedId) ||
+            selectedId.ValueKind != JsonValueKind.String ||
+            root.TryGetProperty(nameof(AppConfiguration.AppleAccountEmail), out _))
+        {
+            return false;
+        }
+
+        return profiles.EnumerateArray().All(profile =>
+            profile.ValueKind == JsonValueKind.Object &&
+            profile.TryGetProperty(nameof(AppleAccountProfile.Id), out var id) &&
+            id.ValueKind == JsonValueKind.String &&
+            profile.TryGetProperty(nameof(AppleAccountProfile.Email), out var email) &&
+            email.ValueKind == JsonValueKind.String);
+    }
+
+    private static ConfigurationNormalizationResult NormalizeConfiguration(
+        AppConfiguration configuration,
+        string sourceDescription)
+    {
+        if (configuration.SchemaVersion is < 1 or > AppConfiguration.CurrentSchemaVersion)
+        {
+            throw new InvalidDataException(
+                $"The {sourceDescription} settings file uses unsupported schema version " +
+                $"{configuration.SchemaVersion}.");
+        }
+
+        var changed = configuration.SchemaVersion != AppConfiguration.CurrentSchemaVersion ||
+                      configuration.AppleAccounts is null ||
+                      configuration.AppleAccountEmail is not null;
+        var originalSelectedAccountId = configuration.SelectedAppleAccountId;
+        var selectedAccountId = NormalizeSelectedAccountId(
+            configuration.SelectedAppleAccountId);
+        var profiles = configuration.AppleAccounts ?? [];
+        var normalizedProfiles = new List<AppleAccountProfile>(profiles.Count + 1);
+        var profilesByEmail = new Dictionary<string, AppleAccountProfile>(
+            StringComparer.OrdinalIgnoreCase);
+        var profileIds = new HashSet<string>(StringComparer.Ordinal);
+        var selectedDuplicateReplacementId = string.Empty;
+        var migratedLegacyAccount = false;
+
+        foreach (var profile in profiles)
+        {
+            if (profile is null)
+            {
+                changed = true;
+                continue;
+            }
+
+            var originalEmail = profile.Email;
+            var email = (originalEmail ?? string.Empty).Trim();
+            if (email.Length == 0)
+            {
+                changed = true;
+                continue;
+            }
+
+            var originalId = profile.Id;
+            var id = NormalizeProfileId(profile.Id, sourceDescription);
+            changed |= !string.Equals(originalEmail, email, StringComparison.Ordinal) ||
+                       !string.Equals(originalId, id, StringComparison.Ordinal);
+            if (profilesByEmail.TryGetValue(email, out var existingProfile))
+            {
+                changed = true;
+                if (string.Equals(selectedAccountId, id, StringComparison.Ordinal))
+                {
+                    selectedDuplicateReplacementId = existingProfile.Id;
+                }
+
+                continue;
+            }
+
+            if (!profileIds.Add(id))
+            {
+                throw new InvalidDataException(
+                    $"The {sourceDescription} settings file contains duplicate Apple Account profile IDs.");
+            }
+
+            profile.Id = id;
+            profile.Email = email;
+            profilesByEmail.Add(email, profile);
+            normalizedProfiles.Add(profile);
+        }
+
+        var legacyEmail = configuration.AppleAccountEmail?.Trim();
+        if (!string.IsNullOrWhiteSpace(legacyEmail))
+        {
+            migratedLegacyAccount = true;
+            if (!profilesByEmail.TryGetValue(legacyEmail, out var migratedProfile))
+            {
+                migratedProfile = new AppleAccountProfile
+                {
+                    Email = legacyEmail
+                };
+                normalizedProfiles.Add(migratedProfile);
+                profilesByEmail.Add(legacyEmail, migratedProfile);
+            }
+
+            if (selectedAccountId.Length == 0)
+            {
+                selectedAccountId = migratedProfile.Id;
+            }
+        }
+
+        if (selectedDuplicateReplacementId.Length > 0)
+        {
+            selectedAccountId = selectedDuplicateReplacementId;
+        }
+
+        if (normalizedProfiles.Count == 0)
+        {
+            selectedAccountId = string.Empty;
+        }
+        else if (selectedAccountId.Length == 0 ||
+                 normalizedProfiles.All(profile =>
+                     !string.Equals(profile.Id, selectedAccountId, StringComparison.Ordinal)))
+        {
+            selectedAccountId = normalizedProfiles[0].Id;
+        }
+
+        configuration.SchemaVersion = AppConfiguration.CurrentSchemaVersion;
+        configuration.AppleAccounts = normalizedProfiles;
+        configuration.SelectedAppleAccountId = selectedAccountId;
+        configuration.AppleAccountEmail = null;
+        changed |= !string.Equals(
+            originalSelectedAccountId,
+            selectedAccountId,
+            StringComparison.Ordinal);
+        return new ConfigurationNormalizationResult(changed, migratedLegacyAccount);
+    }
+
+    private static string NormalizeProfileId(string? profileId, string sourceDescription)
+    {
+        var candidate = profileId?.Trim();
+        if (string.IsNullOrEmpty(candidate))
+        {
+            return Guid.NewGuid().ToString("N");
+        }
+
+        if (!Guid.TryParseExact(candidate, "N", out var parsedId) ||
+            parsedId == Guid.Empty)
+        {
+            throw new InvalidDataException(
+                $"The {sourceDescription} settings file contains an invalid Apple Account profile ID.");
+        }
+
+        return parsedId.ToString("N");
+    }
+
+    private static string NormalizeSelectedAccountId(string? selectedAccountId)
+    {
+        var candidate = selectedAccountId?.Trim();
+        return candidate is not null &&
+               Guid.TryParseExact(candidate, "N", out var parsedId) &&
+               parsedId != Guid.Empty
+            ? parsedId.ToString("N")
+            : string.Empty;
     }
 
     private void EnsureDirectories()
@@ -284,7 +478,10 @@ public sealed class ConfigurationService
         Directory.CreateDirectory(_defaultDownloadDirectory);
     }
 
-    private static bool ConfigurationsMatch(AppConfiguration first, AppConfiguration second)
+    private static bool ConfigurationsMatch(
+        AppConfiguration first,
+        AppConfiguration second,
+        bool allowDifferentProfileIds)
     {
         return string.Equals(first.IpatoolPath, second.IpatoolPath, StringComparison.Ordinal) &&
                string.Equals(
@@ -295,11 +492,68 @@ public sealed class ConfigurationService
                    first.DownloadDirectory,
                    second.DownloadDirectory,
                    StringComparison.Ordinal) &&
-               string.Equals(
-                   first.AppleAccountEmail,
-                   second.AppleAccountEmail,
-                   StringComparison.Ordinal) &&
+               first.SchemaVersion == second.SchemaVersion &&
+               ProfilesMatch(
+                   first.AppleAccounts,
+                   second.AppleAccounts,
+                   allowDifferentProfileIds) &&
+               SelectedProfilesMatch(first, second, allowDifferentProfileIds) &&
                first.AutomaticallyRefreshDevices == second.AutomaticallyRefreshDevices;
+    }
+
+    private static bool ProfilesMatch(
+        IReadOnlyList<AppleAccountProfile> first,
+        IReadOnlyList<AppleAccountProfile> second,
+        bool allowDifferentProfileIds)
+    {
+        if (first.Count != second.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < first.Count; index++)
+        {
+            if ((!allowDifferentProfileIds &&
+                 !string.Equals(first[index].Id, second[index].Id, StringComparison.Ordinal)) ||
+                !string.Equals(
+                    first[index].Email,
+                    second[index].Email,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool SelectedProfilesMatch(
+        AppConfiguration first,
+        AppConfiguration second,
+        bool allowDifferentProfileIds)
+    {
+        if (!allowDifferentProfileIds)
+        {
+            return string.Equals(
+                first.SelectedAppleAccountId,
+                second.SelectedAppleAccountId,
+                StringComparison.Ordinal);
+        }
+
+        var firstSelectedEmail = first.AppleAccounts.FirstOrDefault(profile =>
+            string.Equals(
+                profile.Id,
+                first.SelectedAppleAccountId,
+                StringComparison.Ordinal))?.Email;
+        var secondSelectedEmail = second.AppleAccounts.FirstOrDefault(profile =>
+            string.Equals(
+                profile.Id,
+                second.SelectedAppleAccountId,
+                StringComparison.Ordinal))?.Email;
+        return string.Equals(
+            firstSelectedEmail,
+            secondSelectedEmail,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private AppConfiguration CreateDefault()
@@ -309,6 +563,15 @@ public sealed class ConfigurationService
             DownloadDirectory = _defaultDownloadDirectory
         };
     }
+
+    private sealed record ConfigurationReadResult(
+        AppConfiguration Configuration,
+        bool RequiresRewrite,
+        bool MigratedLegacyAccount);
+
+    private sealed record ConfigurationNormalizationResult(
+        bool Changed,
+        bool MigratedLegacyAccount);
 
     private enum ConfigurationLoadState
     {

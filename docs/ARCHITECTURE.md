@@ -20,7 +20,9 @@ The serialized configuration is encrypted with AES-256-GCM using a fresh 12-byte
 
 An earlier plaintext `settings.json` is handled as a one-time migration source. IPA Bridge commits the protected key, writes the encrypted envelope, reopens and authenticates it, compares every configuration field, and only then removes the legacy file. Unknown configuration fields are rejected so an older schema cannot silently discard data. If both files exist with identical values, the verified encrypted file completes the interrupted migration. If their values differ, loading and all later saves fail closed while both files remain untouched. A missing key, a DPAPI failure, an unsupported envelope, or failed AES-GCM authentication likewise stops loading without generating a replacement or overwriting the encrypted data.
 
-This boundary covers only IPA Bridge's settings. Apple passwords, two-factor codes, and ipatool vault passphrases remain non-persistent and pass to ipatool through ConPTY. Downloaded IPAs, installed tools, pairing records, ipatool's independent credential store, and other external files are not encrypted by the IPA Bridge settings key. Windows `CurrentUser` protection also does not defend against code already executing as the same user or against a compromised live session.
+Configuration schema version 2 stores a list of Apple Account profiles and the selected profile ID. Normalization trims emails, deduplicates them case-insensitively, requires opaque GUID profile IDs, and repairs a missing selection deterministically. Loading schema version 1 migrates its single saved email into one selected profile and immediately rewrites the encrypted envelope so the generated profile ID remains stable. The former default-home `%USERPROFILE%\.ipatool` session is not copied automatically; the user reconnects once so the new isolated profile is populated and verified by `auth info`.
+
+This boundary covers only IPA Bridge's settings. Apple passwords, two-factor codes, and ipatool vault passphrases remain non-persistent and pass to ipatool through ConPTY. Downloaded IPAs, installed tools, pairing records, per-profile ipatool files, and other external files are not encrypted by the IPA Bridge settings key. Windows `CurrentUser` protection also does not defend against code already executing as the same user or against a compromised live session.
 
 ## Authentication flow
 
@@ -30,11 +32,17 @@ This boundary covers only IPA Bridge's settings. Apple passwords, two-factor cod
 
 If the account requires two-factor authentication and no code was supplied, the pseudo-console process is ended and the view model reveals the two-factor field. The user then retries; the code is supplied only when the terminal requests it.
 
+Each Apple Account profile has a separate directory below `%LOCALAPPDATA%\IPA Bridge\Accounts\<profile-id>`. For every authenticated ipatool process, IPA Bridge overrides `HOME`, `USERPROFILE`, `HOMEDRIVE`, and `HOMEPATH` in that child process only. ipatool v2.3.0 therefore resolves a different `<home>\.ipatool` directory for every profile without changing IPA Bridge's own process environment.
+
+The isolated `.ipatool` data has two distinct protection properties: ipatool encrypts its account record with the profile's vault passphrase, while its cookie jar is a separate file that relies on the Windows user profile and inherited filesystem access controls. The IPA Bridge AES-GCM settings key does not encrypt either file.
+
+Login records the storefront returned by Apple in the selected profile's ipatool account record. Search, license acquisition, version lookup, and download all execute in that same profile environment, so they use that Apple-assigned storefront. IPA Bridge does not infer a country from an email address, IP address, or Windows locale. Before every authenticated App Store operation, `auth info` must return the email assigned to the selected profile; a missing or mismatched session stops the operation and clears the connected state.
+
 ## Historical version metadata
 
 `ipatool list-versions` returns opaque external version identifiers. IPA Bridge keeps those identifiers as strings, then resolves each one with `get-version-metadata` to obtain the human-readable `displayVersion` and `releaseDate` fields. At most two metadata processes run concurrently because the upstream command performs partial IPA range requests for each version.
 
-Successful metadata is cached for the application session. Individual failures remain selectable by their original external version identifier, so one unavailable historical package does not discard the rest of the list. Switching the selected app cancels the previous lookup queue.
+Successful metadata is cached for the application session with the account profile ID included in the cache key. Individual failures remain selectable by their original external version identifier, so one unavailable historical package does not discard the rest of the list. Switching the selected app or account cancels the previous lookup queue and clears visible results.
 
 ## Tool supply chain
 

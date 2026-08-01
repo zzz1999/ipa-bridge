@@ -17,6 +17,7 @@ public sealed class ConPtyProcessRunner
         IEnumerable<string> arguments,
         IReadOnlyList<ConPtyPrompt>? prompts = null,
         Action<string>? outputReceived = null,
+        IReadOnlyDictionary<string, string>? environment = null,
         CancellationToken cancellationToken = default)
     {
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
@@ -32,6 +33,7 @@ public sealed class ConPtyProcessRunner
         IntPtr attributeList = IntPtr.Zero;
         IntPtr processHandle = IntPtr.Zero;
         IntPtr threadHandle = IntPtr.Zero;
+        IntPtr environmentBlock = IntPtr.Zero;
 
         try
         {
@@ -81,6 +83,7 @@ public sealed class ConPtyProcessRunner
 
             var commandLine = new StringBuilder(BuildCommandLine(executablePath, arguments));
             var currentDirectory = Path.GetDirectoryName(executablePath) ?? AppContext.BaseDirectory;
+            environmentBlock = CreateEnvironmentBlock(environment);
             if (!NativeMethods.CreateProcess(
                     null,
                     commandLine,
@@ -88,7 +91,7 @@ public sealed class ConPtyProcessRunner
                     IntPtr.Zero,
                     false,
                     NativeMethods.ExtendedStartupInfoPresent | NativeMethods.CreateUnicodeEnvironment,
-                    IntPtr.Zero,
+                    environmentBlock,
                     currentDirectory,
                     ref startupInfo,
                     out var processInformation))
@@ -233,11 +236,47 @@ public sealed class ConPtyProcessRunner
                 Marshal.FreeHGlobal(attributeList);
             }
 
+            if (environmentBlock != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(environmentBlock);
+            }
+
             if (pseudoConsole != IntPtr.Zero)
             {
                 NativeMethods.ClosePseudoConsole(pseudoConsole);
             }
         }
+    }
+
+    private static IntPtr CreateEnvironmentBlock(
+        IReadOnlyDictionary<string, string>? overrides)
+    {
+        if (overrides is null || overrides.Count == 0)
+        {
+            return IntPtr.Zero;
+        }
+
+        var variables = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            if (entry.Key is string key && entry.Value is string value)
+            {
+                variables[key] = value;
+            }
+        }
+
+        foreach (var pair in overrides)
+        {
+            if (string.IsNullOrEmpty(pair.Key) || pair.Key.Contains('='))
+            {
+                throw new ArgumentException("Environment variable names must be non-empty and cannot contain '='.", nameof(overrides));
+            }
+
+            variables[pair.Key] = pair.Value;
+        }
+
+        var block = string.Join('\0', variables.Select(pair => $"{pair.Key}={pair.Value}")) + "\0\0";
+        return Marshal.StringToHGlobalUni(block);
     }
 
     private static string BuildCommandLine(string executablePath, IEnumerable<string> arguments)

@@ -15,6 +15,8 @@ public static class AppPaths
 
     public static string IpatoolDirectory => Path.Combine(ToolsDirectory, "ipatool");
 
+    public static string IpatoolAccountsDirectory => Path.Combine(LocalDataDirectory, "Accounts");
+
     public static string DeviceToolsDirectory => Path.Combine(ToolsDirectory, "idevice");
 
     public static string TemporaryDirectory => Path.Combine(LocalDataDirectory, "Temporary");

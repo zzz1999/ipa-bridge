@@ -1,3 +1,7 @@
 namespace IPABridge.Models;
 
-public sealed record IpatoolLoginResult(bool Success, bool RequiresTwoFactor, string Message);
+public sealed record IpatoolLoginResult(
+    bool Success,
+    bool RequiresTwoFactor,
+    string Message,
+    IpatoolAccountInfo? Account = null);

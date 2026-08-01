@@ -9,8 +9,63 @@ using IPABridge.Services;
 using IPABridge.ViewModels;
 
 var fakeIpatoolMode = Environment.GetEnvironmentVariable("IPA_BRIDGE_SMOKE_FAKE_IPATOOL");
-if (fakeIpatoolMode is "download-failure" or "download-success")
+if (fakeIpatoolMode == "login-wait")
 {
+    Console.Write("enter password:");
+    _ = Console.ReadLine();
+    Console.Write("enter passphrase to unlock");
+    _ = Console.ReadLine();
+    var markerPath = Environment.GetEnvironmentVariable(
+        "IPA_BRIDGE_SMOKE_LOGIN_WAIT_MARKER");
+    if (!string.IsNullOrWhiteSpace(markerPath))
+    {
+        File.WriteAllText(markerPath, "waiting");
+    }
+
+    await Task.Delay(TimeSpan.FromMinutes(2));
+    return 0;
+}
+
+if (fakeIpatoolMode is "download-failure" or "download-success" or "search-success")
+{
+    Console.Write("enter passphrase to unlock");
+    var passphrase = Console.ReadLine();
+    if (passphrase != "temporary-vault-secret")
+    {
+        Console.WriteLine("{\"level\":\"error\",\"error\":\"wrong passphrase\",\"success\":false}");
+        return 3;
+    }
+
+    if (args.Contains("auth", StringComparer.Ordinal) &&
+        args.Contains("info", StringComparer.Ordinal))
+    {
+        Console.WriteLine(
+            "{\"level\":\"info\",\"name\":\"Smoke Account\",\"email\":\"cleanup@example.invalid\",\"success\":true}");
+        return 0;
+    }
+
+    if (fakeIpatoolMode == "search-success")
+    {
+        string[] expectedSearchArguments =
+        [
+            "--format",
+            "json",
+            "search",
+            "bridge",
+            "--limit",
+            "25"
+        ];
+        if (!args.SequenceEqual(expectedSearchArguments, StringComparer.Ordinal))
+        {
+            Console.WriteLine("{\"level\":\"error\",\"error\":\"invalid pinned search arguments\",\"success\":false}");
+            return 5;
+        }
+
+        Console.WriteLine(
+            "{\"level\":\"info\",\"count\":1,\"apps\":[{\"id\":1,\"bundleID\":\"com.example.bridge\",\"name\":\"Bridge\",\"version\":\"1.0\",\"price\":0}]}");
+        return 0;
+    }
+
     var outputArgumentIndex = Array.IndexOf(args, "--output");
     if (outputArgumentIndex < 0 || outputArgumentIndex + 1 >= args.Length)
     {
@@ -18,12 +73,11 @@ if (fakeIpatoolMode is "download-failure" or "download-success")
         return 2;
     }
 
-    Console.Write("enter passphrase to unlock");
-    var passphrase = Console.ReadLine();
-    if (passphrase != "temporary-vault-secret")
+    if (!args.Contains("--purchase", StringComparer.Ordinal) ||
+        args.Contains("--platform", StringComparer.Ordinal))
     {
-        Console.WriteLine("{\"level\":\"error\",\"error\":\"wrong passphrase\",\"success\":false}");
-        return 3;
+        Console.WriteLine("{\"level\":\"error\",\"error\":\"invalid pinned download arguments\",\"success\":false}");
+        return 4;
     }
 
     var outputPath = args[outputArgumentIndex + 1];
@@ -54,6 +108,14 @@ if (args is ["--prompt-child"])
         ? """{"success":true}"""
         : """{"success":false}""");
     return password == "temporary-secret" ? 0 : 1;
+}
+
+if (args is ["--environment-child"])
+{
+    Console.WriteLine($"marker={Environment.GetEnvironmentVariable("IPA_BRIDGE_ACCOUNT_ENVIRONMENT_SMOKE")}");
+    Console.WriteLine($"drive={Environment.GetEnvironmentVariable("HOMEDRIVE")}");
+    Console.WriteLine($"path={Environment.GetEnvironmentVariable("HOMEPATH")}");
+    return 0;
 }
 
 var failures = new List<string>();
@@ -200,6 +262,23 @@ Check(
 Check(
     Throws<InvalidDataException>(() => IpatoolJsonParser.ParseSearchResults("""{"level":"info"}""")),
     "ipatool missing search contract is rejected");
+
+var accountInfo = IpatoolJsonParser.ParseAccountInfo(
+    """{"level":"info","name":"Example User","email":"user@example.invalid","success":true}""");
+Check(
+    accountInfo.Email == "user@example.invalid" && accountInfo.Name == "Example User",
+    "ipatool account identity contract");
+Check(
+    Throws<InvalidDataException>(() => IpatoolJsonParser.ParseAccountInfo(
+        """{"level":"info","name":"Missing Email","success":true}""")),
+    "ipatool account identity requires an email address");
+Check(
+    IpatoolService.IsAccountNotFoundError(
+        "failed to get account: failed to get item: The specified item could not be found in the keyring"),
+    "pinned ipatool missing-account error is recognized");
+Check(
+    !IpatoolService.IsAccountNotFoundError("failed to decrypt keyring: incorrect passphrase"),
+    "credential-vault errors are not mistaken for a missing account");
 
 const string downloadOutput =
     """{"level":"info","output":"D:\\Downloads\\Example.ipa","purchased":true,"success":true}""";
@@ -597,6 +676,9 @@ try
         "settings key is protected before it is written to disk");
 
     const string emailCanary = "encrypted-settings-canary@example.invalid";
+    const string secondEmailCanary = "second-encrypted-settings-canary@example.invalid";
+    const string firstAccountId = "11111111111111111111111111111111";
+    const string secondAccountId = "22222222222222222222222222222222";
     const string toolCanary = "SECRET_TOOL_PATH_CANARY";
     const string deviceToolCanary = "SECRET_DEVICE_PATH_CANARY";
     encryptedConfiguration.Current.IpatoolPath = Path.Combine(
@@ -607,7 +689,12 @@ try
         encryptedConfigurationRoot,
         deviceToolCanary);
     encryptedConfiguration.Current.DownloadDirectory = downloadPath;
-    encryptedConfiguration.Current.AppleAccountEmail = emailCanary;
+    encryptedConfiguration.Current.AppleAccounts =
+    [
+        new AppleAccountProfile { Id = firstAccountId, Email = emailCanary },
+        new AppleAccountProfile { Id = secondAccountId, Email = secondEmailCanary }
+    ];
+    encryptedConfiguration.Current.SelectedAppleAccountId = secondAccountId;
     encryptedConfiguration.Current.AutomaticallyRefreshDevices = false;
     await encryptedConfiguration.SaveAsync();
 
@@ -619,6 +706,7 @@ try
         "settings use a versioned AES-256-GCM envelope");
     Check(
         !firstEncryptedText.Contains(emailCanary, StringComparison.Ordinal) &&
+        !firstEncryptedText.Contains(secondEmailCanary, StringComparison.Ordinal) &&
         !firstEncryptedText.Contains(toolCanary, StringComparison.Ordinal) &&
         !firstEncryptedText.Contains(deviceToolCanary, StringComparison.Ordinal),
         "encrypted settings do not expose saved email or path values");
@@ -635,7 +723,13 @@ try
         reopened.IpatoolPath == encryptedConfiguration.Current.IpatoolPath &&
         reopened.DeviceToolsDirectory == encryptedConfiguration.Current.DeviceToolsDirectory &&
         reopened.DownloadDirectory == encryptedConfiguration.Current.DownloadDirectory &&
-        reopened.AppleAccountEmail == emailCanary &&
+        reopened.SchemaVersion == AppConfiguration.CurrentSchemaVersion &&
+        reopened.AppleAccounts.Count == 2 &&
+        reopened.AppleAccounts[0].Id == firstAccountId &&
+        reopened.AppleAccounts[0].Email == emailCanary &&
+        reopened.AppleAccounts[1].Id == secondAccountId &&
+        reopened.AppleAccounts[1].Email == secondEmailCanary &&
+        reopened.SelectedAppleAccountId == secondAccountId &&
         !reopened.AutomaticallyRefreshDevices,
         "encrypted settings round-trip every configuration property");
 
@@ -785,7 +879,7 @@ try
         "a settings migration conflict blocks later saves");
     File.Delete(legacyConfigurationPath);
 
-    var canaries = new[] { emailCanary, toolCanary, deviceToolCanary };
+    var canaries = new[] { emailCanary, secondEmailCanary, toolCanary, deviceToolCanary };
     var plaintextCanaryFound = Directory
         .EnumerateFiles(encryptedConfigurationRoot, "*", SearchOption.AllDirectories)
         .Select(File.ReadAllBytes)
@@ -794,12 +888,26 @@ try
             fileBytes.AsSpan().IndexOf(Encoding.Unicode.GetBytes(canary)) >= 0));
     Check(!plaintextCanaryFound, "local settings files contain no UTF-8 or UTF-16 plaintext canaries");
 
-    var secretConfigurationProperties = typeof(AppConfiguration)
-        .GetProperties()
+    var prohibitedConfigurationTerms = new[]
+    {
+        "Password",
+        "Verification",
+        "Passphrase",
+        "TwoFactor",
+        "Token",
+        "Cookie",
+        "Session",
+        "Credential"
+    };
+    var secretConfigurationProperties = new[]
+        {
+            typeof(AppConfiguration),
+            typeof(AppleAccountProfile)
+        }
+        .SelectMany(type => type.GetProperties().Select(property => $"{type.Name}.{property.Name}"))
         .Where(property =>
-            property.Name.Contains("Password", StringComparison.OrdinalIgnoreCase) ||
-            property.Name.Contains("Verification", StringComparison.OrdinalIgnoreCase) ||
-            property.Name.Contains("Passphrase", StringComparison.OrdinalIgnoreCase))
+            prohibitedConfigurationTerms.Any(term =>
+                property.Contains(term, StringComparison.OrdinalIgnoreCase)))
         .ToArray();
     Check(
         secretConfigurationProperties.Length == 0,
@@ -820,12 +928,13 @@ try
     var legacyConfigurationPath = Path.Combine(legacyMigrationRoot, "settings.json");
     var keyPath = Path.Combine(legacyMigrationRoot, "master-key.v1");
     var downloadPath = Path.Combine(legacyMigrationRoot, "Downloads");
-    var legacyConfiguration = new AppConfiguration
+    const string legacyEmail = "legacy-migration-canary@example.invalid";
+    var legacyConfiguration = new
     {
         IpatoolPath = Path.Combine(legacyMigrationRoot, "legacy-ipatool.exe"),
         DeviceToolsDirectory = Path.Combine(legacyMigrationRoot, "legacy-device-tools"),
         DownloadDirectory = downloadPath,
-        AppleAccountEmail = "legacy-migration-canary@example.invalid",
+        AppleAccountEmail = legacyEmail,
         AutomaticallyRefreshDevices = false
     };
     await File.WriteAllTextAsync(
@@ -841,7 +950,11 @@ try
         new SmokeRandomByteGenerator());
     var migratedConfiguration = await migrationService.LoadAsync();
     Check(
-        migratedConfiguration.AppleAccountEmail == legacyConfiguration.AppleAccountEmail &&
+        migratedConfiguration.SchemaVersion == AppConfiguration.CurrentSchemaVersion &&
+        migratedConfiguration.AppleAccountEmail is null &&
+        migratedConfiguration.AppleAccounts.Count == 1 &&
+        migratedConfiguration.AppleAccounts[0].Email == legacyEmail &&
+        migratedConfiguration.SelectedAppleAccountId == migratedConfiguration.AppleAccounts[0].Id &&
         migratedConfiguration.IpatoolPath == legacyConfiguration.IpatoolPath &&
         !migratedConfiguration.AutomaticallyRefreshDevices,
         "legacy plaintext settings preserve every value during migration");
@@ -852,7 +965,7 @@ try
         "verified legacy settings migration removes the plaintext file");
     Check(
         !File.ReadAllText(secureConfigurationPath)
-            .Contains(legacyConfiguration.AppleAccountEmail, StringComparison.Ordinal),
+            .Contains(legacyEmail, StringComparison.Ordinal),
         "migrated settings are encrypted before legacy plaintext is removed");
 
     var migratedReopenService = new ConfigurationService(
@@ -862,14 +975,159 @@ try
         downloadPath,
         new SmokeKeyProtector(),
         new SmokeRandomByteGenerator());
+    var migratedReopened = await migratedReopenService.LoadAsync();
     Check(
-        (await migratedReopenService.LoadAsync()).AppleAccountEmail ==
-        legacyConfiguration.AppleAccountEmail,
-        "migrated encrypted settings reopen with the persisted key");
+        migratedReopened.AppleAccounts.Count == 1 &&
+        migratedReopened.AppleAccounts[0].Email == legacyEmail &&
+        migratedReopened.AppleAccounts[0].Id == migratedConfiguration.AppleAccounts[0].Id &&
+        migratedReopened.SelectedAppleAccountId == migratedConfiguration.SelectedAppleAccountId,
+        "migrated encrypted settings reopen with a stable account profile ID");
 }
 finally
 {
     Directory.Delete(legacyMigrationRoot, recursive: true);
+}
+
+var encryptedLegacyMigrationRoot = Path.Combine(
+    Path.GetTempPath(),
+    $"ipa-bridge-encrypted-legacy-migration-smoke-{Guid.NewGuid():N}");
+Directory.CreateDirectory(encryptedLegacyMigrationRoot);
+try
+{
+    var secureConfigurationPath = Path.Combine(
+        encryptedLegacyMigrationRoot,
+        "settings.secure.json");
+    var legacyConfigurationPath = Path.Combine(
+        encryptedLegacyMigrationRoot,
+        "settings.json");
+    var keyPath = Path.Combine(encryptedLegacyMigrationRoot, "master-key.v1");
+    var downloadPath = Path.Combine(encryptedLegacyMigrationRoot, "Downloads");
+    const string encryptedLegacyEmail = "encrypted-legacy@example.invalid";
+    var keyProtector = new SmokeKeyProtector();
+    var randomByteGenerator = new SmokeRandomByteGenerator();
+    var dataProtectionService = new LocalDataProtectionService(
+        keyPath,
+        keyProtector,
+        randomByteGenerator);
+    var legacyPlaintext = JsonSerializer.SerializeToUtf8Bytes(new
+    {
+        IpatoolPath = string.Empty,
+        DeviceToolsDirectory = string.Empty,
+        DownloadDirectory = downloadPath,
+        AppleAccountEmail = encryptedLegacyEmail,
+        AutomaticallyRefreshDevices = true
+    });
+    var legacyEnvelope = await dataProtectionService.EncryptAsync(
+        legacyPlaintext,
+        allowKeyCreation: true);
+    try
+    {
+        await File.WriteAllBytesAsync(secureConfigurationPath, legacyEnvelope);
+    }
+    finally
+    {
+        CryptographicOperations.ZeroMemory(legacyPlaintext);
+        CryptographicOperations.ZeroMemory(legacyEnvelope);
+    }
+
+    var encryptedLegacyService = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    var encryptedLegacyMigrated = await encryptedLegacyService.LoadAsync();
+    var migratedAccountId = encryptedLegacyMigrated.AppleAccounts.Single().Id;
+    Check(
+        encryptedLegacyMigrated.AppleAccounts.Single().Email == encryptedLegacyEmail &&
+        encryptedLegacyMigrated.SelectedAppleAccountId == migratedAccountId &&
+        encryptedLegacyMigrated.AppleAccountEmail is null,
+        "legacy encrypted single-account settings migrate to one selected profile");
+
+    var encryptedLegacyReopen = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    Check(
+        (await encryptedLegacyReopen.LoadAsync()).AppleAccounts.Single().Id == migratedAccountId,
+        "legacy encrypted migration is rewritten with a stable profile ID");
+}
+finally
+{
+    Directory.Delete(encryptedLegacyMigrationRoot, recursive: true);
+}
+
+var accountNormalizationRoot = Path.Combine(
+    Path.GetTempPath(),
+    $"ipa-bridge-account-normalization-smoke-{Guid.NewGuid():N}");
+Directory.CreateDirectory(accountNormalizationRoot);
+try
+{
+    var secureConfigurationPath = Path.Combine(accountNormalizationRoot, "settings.secure.json");
+    var legacyConfigurationPath = Path.Combine(accountNormalizationRoot, "settings.json");
+    var keyPath = Path.Combine(accountNormalizationRoot, "master-key.v1");
+    var downloadPath = Path.Combine(accountNormalizationRoot, "Downloads");
+    var normalizationService = new ConfigurationService(
+        secureConfigurationPath,
+        legacyConfigurationPath,
+        keyPath,
+        downloadPath,
+        new SmokeKeyProtector(),
+        new SmokeRandomByteGenerator());
+    await normalizationService.LoadAsync();
+    const string retainedAccountId = "33333333333333333333333333333333";
+    const string duplicateAccountId = "44444444444444444444444444444444";
+    normalizationService.Current.AppleAccounts =
+    [
+        new AppleAccountProfile
+        {
+            Id = retainedAccountId,
+            Email = "  First.Account@example.invalid  "
+        },
+        new AppleAccountProfile
+        {
+            Id = duplicateAccountId,
+            Email = "first.account@EXAMPLE.invalid"
+        },
+        new AppleAccountProfile
+        {
+            Id = "55555555555555555555555555555555",
+            Email = "   "
+        }
+    ];
+    normalizationService.Current.SelectedAppleAccountId = duplicateAccountId;
+    await normalizationService.SaveAsync();
+    Check(
+        normalizationService.Current.AppleAccounts.Count == 1 &&
+        normalizationService.Current.AppleAccounts[0].Id == retainedAccountId &&
+        normalizationService.Current.AppleAccounts[0].Email ==
+        "First.Account@example.invalid" &&
+        normalizationService.Current.SelectedAppleAccountId == retainedAccountId,
+        "account profiles trim emails, deduplicate case-insensitively, and repair selection");
+
+    var validNormalizedSettings = File.ReadAllBytes(secureConfigurationPath);
+    normalizationService.Current.AppleAccounts =
+    [
+        new AppleAccountProfile
+        {
+            Id = "..\\outside",
+            Email = "unsafe@example.invalid"
+        }
+    ];
+    Check(
+        await ThrowsAsync<InvalidDataException>(() => normalizationService.SaveAsync()),
+        "unsafe account profile IDs are rejected before session paths are used");
+    Check(
+        File.ReadAllBytes(secureConfigurationPath).AsSpan().SequenceEqual(validNormalizedSettings),
+        "rejected account profile IDs do not overwrite encrypted settings");
+}
+finally
+{
+    Directory.Delete(accountNormalizationRoot, recursive: true);
 }
 
 var unknownLegacyFieldRoot = Path.Combine(
@@ -1007,12 +1265,44 @@ else
     Check(!result.Output.Contains("temporary-secret", StringComparison.Ordinal), "ConPTY redacts prompt secrets");
     Check(result.Output.Contains("\"success\":true", StringComparison.Ordinal), "ConPTY captures child output");
 
+    var conPtyAccountHome = Path.Combine(
+        Path.GetTempPath(),
+        $"ipa-bridge-conpty-account-home-{Guid.NewGuid():N}");
+    var accountEnvironment = IpatoolService.BuildAccountEnvironment(conPtyAccountHome)
+        .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+    accountEnvironment["IPA_BRIDGE_ACCOUNT_ENVIRONMENT_SMOKE"] = "isolated-account-session";
+    var environmentResult = await runner.RunAsync(
+        executable,
+        ["--environment-child"],
+        environment: accountEnvironment);
+    Check(
+        environmentResult.IsSuccess &&
+        environmentResult.Output.Contains(
+            "marker=isolated-account-session",
+            StringComparison.Ordinal) &&
+        environmentResult.Output.Contains(
+            $"drive={accountEnvironment["HOMEDRIVE"]}",
+            StringComparison.Ordinal) &&
+        environmentResult.Output.Contains(
+            $"path={accountEnvironment["HOMEPATH"]}",
+            StringComparison.Ordinal),
+        "ConPTY applies an isolated per-account Windows home environment");
+
     var temporaryDownloads = Path.Combine(
         Path.GetTempPath(),
         $"ipa-bridge-download-smoke-{Guid.NewGuid():N}");
+    var temporaryAccountSessions = Path.Combine(
+        Path.GetTempPath(),
+        $"ipa-bridge-account-session-smoke-{Guid.NewGuid():N}");
     Directory.CreateDirectory(temporaryDownloads);
     var originalFakeIpatoolMode = Environment.GetEnvironmentVariable(
         "IPA_BRIDGE_SMOKE_FAKE_IPATOOL");
+    var originalLoginWaitMarker = Environment.GetEnvironmentVariable(
+        "IPA_BRIDGE_SMOKE_LOGIN_WAIT_MARKER");
+    var loginWaitMarker = Path.Combine(
+        Path.GetTempPath(),
+        $"ipa-bridge-login-wait-{Guid.NewGuid():N}.txt");
+    var fakeAccountId = Guid.NewGuid().ToString("N");
     try
     {
         var fakeConfiguration = new ConfigurationService();
@@ -1020,11 +1310,67 @@ else
         var fakeIpatool = new IpatoolService(
             new ToolLocationService(fakeConfiguration),
             new ProcessRunner(),
-            new ConPtyProcessRunner());
+            new ConPtyProcessRunner(),
+            temporaryAccountSessions);
+
+        Environment.SetEnvironmentVariable(
+            "IPA_BRIDGE_SMOKE_FAKE_IPATOOL",
+            "login-wait");
+        Environment.SetEnvironmentVariable(
+            "IPA_BRIDGE_SMOKE_LOGIN_WAIT_MARKER",
+            loginWaitMarker);
+        var cancelableStore = new StoreViewModel(
+            fakeConfiguration,
+            fakeIpatool,
+            (_, _, _) => { });
+        cancelableStore.AddAccountCommand.Execute(null);
+        cancelableStore.Email = "cancel@example.invalid";
+        cancelableStore.ApplePassword = "temporary-apple-secret";
+        cancelableStore.VaultPassphrase = "temporary-vault-secret";
+        var loginTask = cancelableStore.LoginCommand.ExecuteAsync();
+        var markerDeadline = DateTime.UtcNow.AddSeconds(10);
+        while (!File.Exists(loginWaitMarker) && DateTime.UtcNow < markerDeadline)
+        {
+            await Task.Delay(25);
+        }
+
+        Check(
+            File.Exists(loginWaitMarker) && cancelableStore.IsBusy,
+            "an in-flight Apple Account login reaches the cancellable isolated session");
+        var pendingAccountDirectory = Directory
+            .EnumerateDirectories(temporaryAccountSessions)
+            .Single();
+        var lockedCookie = Path.Combine(pendingAccountDirectory, "cleanup.lock");
+        await using (var lockedCookieStream = new FileStream(
+                         lockedCookie,
+                         FileMode.CreateNew,
+                         FileAccess.ReadWrite,
+                         FileShare.None))
+        {
+            cancelableStore.LeaveStore();
+            await loginTask.WaitAsync(TimeSpan.FromSeconds(10));
+            Check(
+                !cancelableStore.IsBusy &&
+                cancelableStore.IsAddingAccount &&
+                Directory.Exists(pendingAccountDirectory),
+                "failed pending-session cleanup retains a retryable account handle");
+        }
+
+        cancelableStore.CancelAccountEditCommand.Execute(null);
+        Check(
+            !cancelableStore.IsAddingAccount &&
+            !Directory.Exists(pendingAccountDirectory),
+            "pending-session cleanup succeeds on retry after the file lock is released");
+
         var fakeApp = new StoreApp
         {
             BundleIdentifier = "com.example.cleanup",
             Name = "Cleanup Test"
+        };
+        var fakeAccount = new AppleAccountProfile
+        {
+            Id = fakeAccountId,
+            Email = "cleanup@example.invalid"
         };
 
         Environment.SetEnvironmentVariable(
@@ -1034,6 +1380,7 @@ else
         try
         {
             await fakeIpatool.DownloadAsync(
+                fakeAccount,
                 fakeApp,
                 temporaryDownloads,
                 "temporary-vault-secret");
@@ -1053,10 +1400,62 @@ else
                 .Any(),
             "failed ipatool download removes partial IPA and temporary files");
 
+        var secondFakeAccount = new AppleAccountProfile
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Email = "cleanup@example.invalid"
+        };
+        _ = await fakeIpatool.GetStoredAccountAsync(
+            secondFakeAccount,
+            "temporary-vault-secret");
+        Check(
+            Directory.Exists(Path.Combine(temporaryAccountSessions, fakeAccount.Id)) &&
+            Directory.Exists(Path.Combine(temporaryAccountSessions, secondFakeAccount.Id)) &&
+            !string.Equals(fakeAccount.Id, secondFakeAccount.Id, StringComparison.Ordinal),
+            "two Apple Account profiles receive distinct local ipatool home directories");
+
+        Environment.SetEnvironmentVariable(
+            "IPA_BRIDGE_SMOKE_FAKE_IPATOOL",
+            "search-success");
+        var fakeSearchResults = await fakeIpatool.SearchAsync(
+            fakeAccount,
+            "bridge",
+            "temporary-vault-secret");
+        Check(
+            fakeSearchResults.Count == 1 &&
+            fakeSearchResults[0].BundleIdentifier == "com.example.bridge",
+            "search uses the pinned v2.3.0 flags inside the selected account environment");
+
+        var mismatchedAccount = new AppleAccountProfile
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Email = "different@example.invalid"
+        };
+        var mismatchedSessionRejected = false;
+        try
+        {
+            _ = await fakeIpatool.SearchAsync(
+                mismatchedAccount,
+                "bridge",
+                "temporary-vault-secret");
+        }
+        catch (IpatoolAccountSessionException exception)
+            when (exception.Message.Contains(
+                "contains cleanup@example.invalid",
+                StringComparison.Ordinal))
+        {
+            mismatchedSessionRejected = true;
+        }
+
+        Check(
+            mismatchedSessionRejected,
+            "a selected profile cannot use another account's isolated ipatool session");
+
         Environment.SetEnvironmentVariable(
             "IPA_BRIDGE_SMOKE_FAKE_IPATOOL",
             "download-success");
         var completedIpa = await fakeIpatool.DownloadAsync(
+            fakeAccount,
             fakeApp,
             temporaryDownloads,
             "temporary-vault-secret");
@@ -1077,7 +1476,15 @@ else
         Environment.SetEnvironmentVariable(
             "IPA_BRIDGE_SMOKE_FAKE_IPATOOL",
             originalFakeIpatoolMode);
+        Environment.SetEnvironmentVariable(
+            "IPA_BRIDGE_SMOKE_LOGIN_WAIT_MARKER",
+            originalLoginWaitMarker);
+        File.Delete(loginWaitMarker);
         Directory.Delete(temporaryDownloads, recursive: true);
+        if (Directory.Exists(temporaryAccountSessions))
+        {
+            Directory.Delete(temporaryAccountSessions, recursive: true);
+        }
     }
 
     var officialIpatool = Environment.GetEnvironmentVariable("IPA_BRIDGE_TEST_IPATOOL");
@@ -1136,6 +1543,26 @@ else
                 new[] { "download", "get-version-metadata", "list-versions", "search" }
                     .All(command => helpResult.CombinedOutput.Contains(command, StringComparison.Ordinal)),
                 "official ipatool command surface matches IPA Bridge");
+
+            var searchHelpResult = await processRunner.RunAsync(
+                officialIpatool,
+                ["search", "--help"],
+                cancellationToken: offlineContractTimeout.Token);
+            Check(
+                searchHelpResult.IsSuccess &&
+                searchHelpResult.CombinedOutput.Contains("--limit", StringComparison.Ordinal) &&
+                !searchHelpResult.CombinedOutput.Contains("--platform", StringComparison.Ordinal),
+                "pinned ipatool search flags match IPA Bridge arguments");
+
+            var downloadHelpResult = await processRunner.RunAsync(
+                officialIpatool,
+                ["download", "--help"],
+                cancellationToken: offlineContractTimeout.Token);
+            Check(
+                downloadHelpResult.IsSuccess &&
+                downloadHelpResult.CombinedOutput.Contains("--purchase", StringComparison.Ordinal) &&
+                !downloadHelpResult.CombinedOutput.Contains("--platform", StringComparison.Ordinal),
+                "pinned ipatool download flags match IPA Bridge arguments");
 
             var jsonErrorResult = await processRunner.RunAsync(
                 officialIpatool,

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using IPABridge.Infrastructure;
 using IPABridge.Models;
 using IPABridge.Services;
@@ -10,6 +11,9 @@ public sealed class StoreViewModel : ObservableObject
     private readonly ConfigurationService _configurationService;
     private readonly IpatoolService _ipatoolService;
     private readonly Action<string, string, bool> _addActivity;
+    private AppleAccountProfile? _selectedAccount;
+    private IpatoolAccountInfo? _activeAccount;
+    private string? _pendingAccountId;
     private string _email = string.Empty;
     private string _applePassword = string.Empty;
     private string _twoFactorCode = string.Empty;
@@ -18,8 +22,12 @@ public sealed class StoreViewModel : ObservableObject
     private StoreApp? _selectedApp;
     private StoreAppVersion? _selectedVersion;
     private CancellationTokenSource? _versionLookupCancellation;
+    private CancellationTokenSource? _operationCancellation;
+    private bool _leaveStoreCleanupPending;
     private bool _isBusy;
     private bool _isLoggedIn;
+    private bool _isAddingAccount;
+    private bool _isRemoveConfirmationVisible;
     private bool _requiresTwoFactor;
     private bool _isVerboseLoggingTipVisible = true;
     private string _statusMessage = "Install ipatool to connect to the App Store.";
@@ -39,6 +47,17 @@ public sealed class StoreViewModel : ObservableObject
         SearchCommand = new AsyncRelayCommand(SearchAsync, CanSearch);
         DownloadCommand = new AsyncRelayCommand(DownloadAsync, CanDownload);
         LoadVersionsCommand = new AsyncRelayCommand(LoadVersionsAsync, CanDownload);
+        AddAccountCommand = new RelayCommand(BeginAddAccount, () => !IsBusy && !IsAddingAccount);
+        CancelAccountEditCommand = new RelayCommand(CancelAccountEdit, () => IsAddingAccount && !IsBusy);
+        RequestRemoveAccountCommand = new RelayCommand(
+            () => IsRemoveConfirmationVisible = true,
+            () => SelectedAccount is not null && !IsBusy && !IsAddingAccount);
+        CancelRemoveAccountCommand = new RelayCommand(
+            () => IsRemoveConfirmationVisible = false,
+            () => IsRemoveConfirmationVisible && !IsBusy);
+        ConfirmRemoveAccountCommand = new AsyncRelayCommand(
+            RemoveSelectedAccountAsync,
+            () => SelectedAccount is not null && !IsBusy && IsRemoveConfirmationVisible);
         DismissVerboseLoggingTipCommand = new RelayCommand(() => IsVerboseLoggingTipVisible = false);
     }
 
@@ -47,6 +66,8 @@ public sealed class StoreViewModel : ObservableObject
     public ObservableCollection<StoreApp> SearchResults { get; } = [];
 
     public ObservableCollection<StoreAppVersion> Versions { get; } = [];
+
+    public ObservableCollection<AppleAccountProfile> Accounts { get; } = [];
 
     public AsyncRelayCommand LoginCommand { get; }
 
@@ -58,7 +79,82 @@ public sealed class StoreViewModel : ObservableObject
 
     public AsyncRelayCommand LoadVersionsCommand { get; }
 
+    public RelayCommand AddAccountCommand { get; }
+
+    public RelayCommand CancelAccountEditCommand { get; }
+
+    public RelayCommand RequestRemoveAccountCommand { get; }
+
+    public RelayCommand CancelRemoveAccountCommand { get; }
+
+    public AsyncRelayCommand ConfirmRemoveAccountCommand { get; }
+
     public RelayCommand DismissVerboseLoggingTipCommand { get; }
+
+    public AppleAccountProfile? SelectedAccount
+    {
+        get => _selectedAccount;
+        private set
+        {
+            var previousAccount = _selectedAccount;
+            if (!SetProperty(ref _selectedAccount, value))
+            {
+                return;
+            }
+
+            if (previousAccount is not null)
+            {
+                previousAccount.PropertyChanged -= SelectedAccountOnPropertyChanged;
+            }
+
+            if (value is not null)
+            {
+                value.PropertyChanged += SelectedAccountOnPropertyChanged;
+            }
+
+            OnPropertyChanged(nameof(SelectedAccountSummary));
+            OnPropertyChanged(nameof(StorefrontSummary));
+            OnPropertyChanged(nameof(AccountFormTitle));
+            OnPropertyChanged(nameof(AccountActionLabel));
+            NotifyCommands();
+        }
+    }
+
+    private void SelectedAccountOnPropertyChanged(
+        object? sender,
+        PropertyChangedEventArgs eventArgs)
+    {
+        if (eventArgs.PropertyName != nameof(AppleAccountProfile.Email))
+        {
+            return;
+        }
+
+        if (!IsAddingAccount)
+        {
+            Email = SelectedAccount?.Email ?? string.Empty;
+        }
+
+        OnPropertyChanged(nameof(SelectedAccountSummary));
+        OnPropertyChanged(nameof(StorefrontSummary));
+    }
+
+    public string SelectedAccountSummary => SelectedAccount is null
+        ? "No Apple Account selected"
+        : $"Selected account: {SelectedAccount.Email}";
+
+    public string StorefrontSummary => SelectedAccount is null
+        ? "Select an account to choose an App Store region."
+        : $"Searches and purchases use the App Store region assigned to {SelectedAccount.Email}.";
+
+    public string AccountFormTitle => IsAddingAccount
+        ? "Add Apple Account"
+        : SelectedAccount is null
+            ? "Select or add an account"
+            : "Reconnect Selected Account";
+
+    public string AccountActionLabel => IsAddingAccount ? "Add & Sign In" : "Sign In Securely";
+
+    public bool CanSelectAccount => !IsBusy && !IsAddingAccount;
 
     public string Email
     {
@@ -156,6 +252,7 @@ public sealed class StoreViewModel : ObservableObject
                 return;
             }
 
+            OnPropertyChanged(nameof(CanSelectAccount));
             NotifyCommands();
         }
     }
@@ -165,6 +262,44 @@ public sealed class StoreViewModel : ObservableObject
         get => _isLoggedIn;
         private set => SetProperty(ref _isLoggedIn, value);
     }
+
+    public bool IsAddingAccount
+    {
+        get => _isAddingAccount;
+        private set
+        {
+            if (!SetProperty(ref _isAddingAccount, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(AccountFormTitle));
+            OnPropertyChanged(nameof(AccountActionLabel));
+            OnPropertyChanged(nameof(IsAccountEmailReadOnly));
+            OnPropertyChanged(nameof(CanSelectAccount));
+            NotifyCommands();
+        }
+    }
+
+    public bool IsAccountEmailReadOnly => !IsAddingAccount;
+
+    public bool IsRemoveConfirmationVisible
+    {
+        get => _isRemoveConfirmationVisible;
+        private set
+        {
+            if (SetProperty(ref _isRemoveConfirmationVisible, value))
+            {
+                NotifyCommands();
+            }
+        }
+    }
+
+    public string ActiveAccountLabel => _activeAccount is null
+        ? "Account session not checked"
+        : string.IsNullOrWhiteSpace(_activeAccount.Name)
+            ? $"Connected as {_activeAccount.Email}"
+            : $"Connected as {_activeAccount.Name} ({_activeAccount.Email})";
 
     public bool RequiresTwoFactor
     {
@@ -192,10 +327,81 @@ public sealed class StoreViewModel : ObservableObject
 
     public void LoadConfiguration()
     {
-        Email = _configurationService.Current.AppleAccountEmail;
+        Accounts.Clear();
+        foreach (var account in _configurationService.Current.AppleAccounts)
+        {
+            Accounts.Add(account);
+        }
+
+        var selectedAccount = Accounts.FirstOrDefault(account => string.Equals(
+                                  account.Id,
+                                  _configurationService.Current.SelectedAppleAccountId,
+                                  StringComparison.Ordinal))
+                              ?? Accounts.FirstOrDefault();
+        ApplySelectedAccount(selectedAccount, clearSecrets: false);
         StatusMessage = _ipatoolService.IsAvailable
-            ? "Enter your local vault passphrase to check an existing sign-in or reconnect your account."
+            ? selectedAccount is null
+                ? "Add an Apple Account to search its App Store region."
+                : "Enter this account's local vault passphrase and check its isolated sign-in."
             : "Install the official ipatool from Settings first.";
+    }
+
+    public void RefreshToolAvailability()
+    {
+        if (!_ipatoolService.IsAvailable)
+        {
+            ClearAccountOperationState(clearSecrets: true);
+            StatusMessage = "Install the official ipatool from Settings first.";
+        }
+        else if (SelectedAccount is null)
+        {
+            StatusMessage = "Add an Apple Account to search its App Store region.";
+        }
+
+        NotifyCommands();
+    }
+
+    public async Task SelectAccountAsync(AppleAccountProfile? account)
+    {
+        if (IsBusy || account is null || !Accounts.Contains(account))
+        {
+            return;
+        }
+
+        if (ReferenceEquals(SelectedAccount, account) && !IsAddingAccount)
+        {
+            return;
+        }
+
+        var previousAccount = SelectedAccount;
+        await RunBusyAsync("Switching Apple Account…", async cancellationToken =>
+        {
+            if (!RemovePendingAccountSession())
+            {
+                OnPropertyChanged(nameof(SelectedAccount));
+                throw new IOException(
+                    "The temporary account session could not be removed. Retry cleanup before switching accounts.");
+            }
+
+            IsAddingAccount = false;
+            _pendingAccountId = null;
+            IsRemoveConfirmationVisible = false;
+            ApplySelectedAccount(account, clearSecrets: true);
+            SyncAccountsToConfiguration();
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await _configurationService.SaveAsync();
+            }
+            catch
+            {
+                ApplySelectedAccount(previousAccount, clearSecrets: true);
+                SyncAccountsToConfiguration();
+                throw;
+            }
+
+            StatusMessage = $"Selected {account.Email}. Enter its vault passphrase to check this account's App Store session.";
+        });
     }
 
     public void ClearSecrets()
@@ -206,10 +412,208 @@ public sealed class StoreViewModel : ObservableObject
         RequiresTwoFactor = false;
     }
 
+    public void LeaveStore()
+    {
+        _leaveStoreCleanupPending = true;
+        _versionLookupCancellation?.Cancel();
+        _operationCancellation?.Cancel();
+        ClearSecrets();
+        if (!IsBusy)
+        {
+            CompleteLeaveStoreCleanup();
+        }
+    }
+
+    private void BeginAddAccount()
+    {
+        if (!RemovePendingAccountSession())
+        {
+            StatusMessage = "The previous temporary account session could not be removed. Try adding the account again to retry cleanup.";
+            return;
+        }
+
+        _pendingAccountId = Guid.NewGuid().ToString("N");
+        IsAddingAccount = true;
+        IsRemoveConfirmationVisible = false;
+        ClearAccountOperationState(clearSecrets: true);
+        Email = string.Empty;
+        StatusMessage = "Enter another Apple Account. Its ipatool session and storefront will be kept separate.";
+    }
+
+    private void CancelAccountEdit()
+    {
+        if (!RemovePendingAccountSession())
+        {
+            StatusMessage = "The temporary account session could not be removed. Select Cancel Adding Account again to retry.";
+            return;
+        }
+
+        _pendingAccountId = null;
+        _leaveStoreCleanupPending = false;
+        IsAddingAccount = false;
+        Email = SelectedAccount?.Email ?? string.Empty;
+        ClearSecrets();
+        StatusMessage = SelectedAccount is null
+            ? "Add an Apple Account to continue."
+            : $"Selected {SelectedAccount.Email}.";
+    }
+
+    private async Task RemoveSelectedAccountAsync()
+    {
+        var account = SelectedAccount;
+        if (account is null)
+        {
+            return;
+        }
+
+        var accountIndex = Accounts.IndexOf(account);
+        await RunBusyAsync("Removing local account profile…", async cancellationToken =>
+        {
+            Accounts.Remove(account);
+            IsRemoveConfirmationVisible = false;
+            ApplySelectedAccount(Accounts.FirstOrDefault(), clearSecrets: true);
+            SyncAccountsToConfiguration();
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await _configurationService.SaveAsync();
+            }
+            catch
+            {
+                Accounts.Insert(Math.Clamp(accountIndex, 0, Accounts.Count), account);
+                ApplySelectedAccount(account, clearSecrets: true);
+                IsRemoveConfirmationVisible = true;
+                SyncAccountsToConfiguration();
+                throw;
+            }
+
+            try
+            {
+                _ipatoolService.RemoveLocalAccountSession(account);
+                StatusMessage = $"Removed {account.Email} and its local ipatool session from this PC.";
+                _addActivity("Apple Account removed", account.Email, true);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                Accounts.Insert(Math.Clamp(accountIndex, 0, Accounts.Count), account);
+                ApplySelectedAccount(account, clearSecrets: true);
+                IsRemoveConfirmationVisible = true;
+                SyncAccountsToConfiguration();
+                try
+                {
+                    await _configurationService.SaveAsync();
+                    StatusMessage = $"The local ipatool session could not be deleted, so {account.Email} remains available for another removal attempt: {exception.Message}";
+                }
+                catch (Exception restoreException)
+                {
+                    StatusMessage = $"The local session and profile could not be removed cleanly. Restart IPA Bridge before changing accounts: {restoreException.Message}";
+                }
+
+                _addActivity("Local account cleanup failed", exception.Message, false);
+            }
+        });
+    }
+
+    private void ApplySelectedAccount(AppleAccountProfile? account, bool clearSecrets)
+    {
+        SelectedAccount = account;
+        Email = account?.Email ?? string.Empty;
+        ClearAccountOperationState(clearSecrets);
+    }
+
+    private void ClearAccountOperationState(bool clearSecrets)
+    {
+        _versionLookupCancellation?.Cancel();
+        SearchResults.Clear();
+        SelectedApp = null;
+        Versions.Clear();
+        SelectedVersion = null;
+        SetActiveAccount(null);
+        RequiresTwoFactor = false;
+        if (clearSecrets)
+        {
+            ClearSecrets();
+        }
+    }
+
+    private void SetActiveAccount(IpatoolAccountInfo? account)
+    {
+        _activeAccount = account;
+        IsLoggedIn = account is not null &&
+                     SelectedAccount is not null &&
+                     string.Equals(
+                         account.Email,
+                         SelectedAccount.Email,
+                         StringComparison.OrdinalIgnoreCase);
+        OnPropertyChanged(nameof(ActiveAccountLabel));
+        NotifyCommands();
+    }
+
+    private void SyncAccountsToConfiguration()
+    {
+        _configurationService.Current.AppleAccounts = Accounts
+            .Select(account => new AppleAccountProfile
+            {
+                Id = account.Id,
+                Email = account.Email
+            })
+            .ToList();
+        _configurationService.Current.SelectedAppleAccountId = SelectedAccount?.Id ?? string.Empty;
+    }
+
+    private bool RemovePendingAccountSession()
+    {
+        if (_pendingAccountId is null)
+        {
+            return true;
+        }
+
+        try
+        {
+            _ipatoolService.RemoveLocalAccountSession(new AppleAccountProfile
+            {
+                Id = _pendingAccountId,
+                Email = Email
+            });
+            return true;
+        }
+        catch (IOException exception)
+        {
+            _addActivity("Local account cleanup failed", exception.Message, false);
+            return false;
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            _addActivity("Local account cleanup failed", exception.Message, false);
+            return false;
+        }
+    }
+
+    private void CompleteLeaveStoreCleanup()
+    {
+        if (!_leaveStoreCleanupPending)
+        {
+            return;
+        }
+
+        if (RemovePendingAccountSession())
+        {
+            _pendingAccountId = null;
+            IsAddingAccount = false;
+            Email = SelectedAccount?.Email ?? string.Empty;
+            _leaveStoreCleanupPending = false;
+        }
+        else
+        {
+            StatusMessage = "The temporary account session could not be removed. Return to the App Store page and retry account cleanup.";
+        }
+    }
+
     private bool CanLogin()
     {
         return !IsBusy &&
                _ipatoolService.IsAvailable &&
+               (IsAddingAccount || SelectedAccount is not null) &&
                !string.IsNullOrWhiteSpace(Email) &&
                !string.IsNullOrWhiteSpace(ApplePassword) &&
                !string.IsNullOrWhiteSpace(VaultPassphrase);
@@ -219,6 +623,8 @@ public sealed class StoreViewModel : ObservableObject
     {
         return !IsBusy &&
                _ipatoolService.IsAvailable &&
+               SelectedAccount is not null &&
+               !IsAddingAccount &&
                !string.IsNullOrWhiteSpace(VaultPassphrase);
     }
 
@@ -226,6 +632,9 @@ public sealed class StoreViewModel : ObservableObject
     {
         return !IsBusy &&
                _ipatoolService.IsAvailable &&
+               SelectedAccount is not null &&
+               IsLoggedIn &&
+               !IsAddingAccount &&
                !string.IsNullOrWhiteSpace(SearchQuery) &&
                !string.IsNullOrWhiteSpace(VaultPassphrase);
     }
@@ -233,26 +642,133 @@ public sealed class StoreViewModel : ObservableObject
     private bool CanDownload()
     {
         return !IsBusy &&
+               SelectedAccount is not null &&
+               IsLoggedIn &&
+               !IsAddingAccount &&
                SelectedApp is not null &&
                !string.IsNullOrWhiteSpace(VaultPassphrase);
     }
 
     private async Task LoginAsync()
     {
-        await RunBusyAsync("Signing in securely…", async () =>
+        var requestedEmail = Email.Trim();
+        var account = IsAddingAccount
+            ? Accounts.FirstOrDefault(existing => string.Equals(
+                  existing.Email,
+                  requestedEmail,
+                  StringComparison.OrdinalIgnoreCase))
+              ?? new AppleAccountProfile
+              {
+                  Id = _pendingAccountId ?? Guid.NewGuid().ToString("N"),
+                  Email = requestedEmail
+              }
+            : SelectedAccount;
+        if (account is null)
+        {
+            return;
+        }
+
+        var accountWasPersisted = Accounts.Contains(account);
+        var originalEmail = account.Email;
+        var previousSelectedAccount = SelectedAccount;
+
+        // A login attempt can replace the isolated ipatool session. Require a
+        // fresh confirmed identity before showing the connected state again.
+        SetActiveAccount(null);
+        await RunBusyAsync("Signing in securely…", async cancellationToken =>
         {
             var result = await _ipatoolService.LoginAsync(
-                Email.Trim(),
+                account,
                 ApplePassword,
                 string.IsNullOrWhiteSpace(TwoFactorCode) ? null : TwoFactorCode.Trim(),
-                VaultPassphrase);
-            IsLoggedIn = result.Success;
+                VaultPassphrase,
+                cancellationToken);
             RequiresTwoFactor = result.RequiresTwoFactor;
             StatusMessage = result.Message;
-            if (result.Success)
+            if (result.Success && result.Account is not null)
             {
-                _configurationService.Current.AppleAccountEmail = Email.Trim();
-                await _configurationService.SaveAsync();
+                _ipatoolService.InvalidateAccountCache(account);
+                var duplicate = Accounts.FirstOrDefault(existing =>
+                    !ReferenceEquals(existing, account) &&
+                    string.Equals(
+                        existing.Email,
+                        result.Account.Email,
+                        StringComparison.OrdinalIgnoreCase));
+                if (duplicate is not null)
+                {
+                    if (!Accounts.Contains(account))
+                    {
+                        _ipatoolService.RemoveLocalAccountSession(account);
+                        _pendingAccountId = Guid.NewGuid().ToString("N");
+                    }
+
+                    throw new InvalidOperationException(
+                        $"{result.Account.Email} already belongs to another local account profile.");
+                }
+
+                account.Email = result.Account.Email;
+                if (!Accounts.Contains(account))
+                {
+                    Accounts.Add(account);
+                }
+
+                if (_pendingAccountId is not null &&
+                    !string.Equals(_pendingAccountId, account.Id, StringComparison.Ordinal))
+                {
+                    if (!RemovePendingAccountSession())
+                    {
+                        throw new IOException(
+                            "The temporary account session could not be removed after selecting the existing profile.");
+                    }
+                }
+
+                _pendingAccountId = null;
+                IsAddingAccount = false;
+                ApplySelectedAccount(account, clearSecrets: false);
+                SetActiveAccount(result.Account);
+                SyncAccountsToConfiguration();
+                try
+                {
+                    await _configurationService.SaveAsync();
+                }
+                catch (Exception exception)
+                {
+                    if (!accountWasPersisted)
+                    {
+                        Accounts.Remove(account);
+                        _pendingAccountId = account.Id;
+                        var temporarySessionRemoved = RemovePendingAccountSession();
+                        if (temporarySessionRemoved)
+                        {
+                            _pendingAccountId = Guid.NewGuid().ToString("N");
+                        }
+
+                        IsAddingAccount = true;
+                        ApplySelectedAccount(previousSelectedAccount, clearSecrets: false);
+                        Email = requestedEmail;
+                        SetActiveAccount(null);
+                        StatusMessage = temporarySessionRemoved
+                            ? $"Apple sign-in succeeded, but the new account profile could not be saved. The temporary local session was removed: {exception.Message}"
+                            : $"Apple sign-in succeeded, but the new profile and temporary session could not be removed cleanly. Retry Cancel Adding Account: {exception.Message}";
+                    }
+                    else
+                    {
+                        account.Email = originalEmail;
+                        ApplySelectedAccount(previousSelectedAccount, clearSecrets: false);
+                        SetActiveAccount(result.Account);
+                        StatusMessage = $"The account connected, but updated profile metadata could not be saved: {exception.Message}";
+                    }
+
+                    SyncAccountsToConfiguration();
+                    _addActivity("Apple Account profile save failed", exception.Message, false);
+                    return;
+                }
+
+                StatusMessage = $"Connected {result.Account.Email}. Searches and purchases now use this account's App Store region.";
+            }
+            else
+            {
+                SetActiveAccount(null);
             }
 
             _addActivity("App Store sign-in", result.Message, result.Success);
@@ -263,20 +779,47 @@ public sealed class StoreViewModel : ObservableObject
 
     private async Task CheckAccountAsync()
     {
-        await RunBusyAsync("Checking account…", async () =>
+        var account = SelectedAccount;
+        if (account is null)
         {
-            IsLoggedIn = await _ipatoolService.HasStoredAccountAsync(VaultPassphrase);
-            StatusMessage = IsLoggedIn
-                ? "A valid App Store sign-in was found."
-                : "No valid sign-in was found. Reconnect your account.";
+            return;
+        }
+
+        SetActiveAccount(null);
+        await RunBusyAsync("Checking account…", async cancellationToken =>
+        {
+            var accountInfo = await _ipatoolService.GetStoredAccountAsync(
+                account,
+                VaultPassphrase,
+                cancellationToken);
+            var matches = accountInfo is not null && string.Equals(
+                accountInfo.Email,
+                account.Email,
+                StringComparison.OrdinalIgnoreCase);
+            SetActiveAccount(matches ? accountInfo : null);
+            StatusMessage = accountInfo is null
+                ? $"No sign-in was found for {account.Email}. Sign in to create its isolated session."
+                : matches
+                    ? $"{account.Email} is ready. Searches use this account's App Store region."
+                    : $"This profile contains a sign-in for {accountInfo.Email}. Reconnect {account.Email}.";
         });
     }
 
     private async Task SearchAsync()
     {
-        await RunBusyAsync("Searching the App Store…", async () =>
+        var account = SelectedAccount;
+        if (account is null)
         {
-            var apps = await _ipatoolService.SearchAsync(SearchQuery.Trim(), VaultPassphrase);
+            return;
+        }
+
+        await RunBusyAsync("Searching the App Store…", async cancellationToken =>
+        {
+            var apps = await _ipatoolService.SearchAsync(
+                account,
+                SearchQuery.Trim(),
+                VaultPassphrase,
+                cancellationToken);
             SearchResults.Clear();
             foreach (var app in apps)
             {
@@ -285,16 +828,20 @@ public sealed class StoreViewModel : ObservableObject
 
             SelectedApp = SearchResults.FirstOrDefault();
             StatusMessage = apps.Count == 0
-                ? "No matching iPhone apps were found."
-                : $"Results found: {apps.Count}.";
-            _addActivity("App Store search", $"{SearchQuery.Trim()} — Results: {apps.Count}", true);
+                ? $"No matching iPhone apps were found in {account.Email}'s App Store region."
+                : $"Results found: {apps.Count} for {account.Email}.";
+            _addActivity(
+                "App Store search",
+                $"{account.Email} — {SearchQuery.Trim()} — Results: {apps.Count}",
+                true);
         });
     }
 
     private async Task LoadVersionsAsync()
     {
         var app = SelectedApp;
-        if (app is null)
+        var account = SelectedAccount;
+        if (app is null || account is null)
         {
             return;
         }
@@ -325,18 +872,22 @@ public sealed class StoreViewModel : ObservableObject
 
         try
         {
-            await RunBusyAsync("Loading version identifiers…", async () =>
+            await RunBusyAsync("Loading version identifiers…", async operationCancellationToken =>
             {
+                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellation.Token,
+                    operationCancellationToken);
                 IReadOnlyList<StoreAppVersion> versions;
                 try
                 {
                     versions = await _ipatoolService.ListVersionsAsync(
+                        account,
                         app,
                         VaultPassphrase,
                         progress,
-                        cancellation.Token);
+                        linkedCancellation.Token);
                 }
-                catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                catch (OperationCanceledException) when (linkedCancellation.IsCancellationRequested)
                 {
                     return;
                 }
@@ -371,42 +922,67 @@ public sealed class StoreViewModel : ObservableObject
 
     private async Task DownloadAsync()
     {
-        if (SelectedApp is null)
+        if (SelectedApp is null || SelectedAccount is null)
         {
             return;
         }
 
         var app = SelectedApp;
-        await RunBusyAsync($"Downloading {app.Name}…", async () =>
+        var account = SelectedAccount;
+        await RunBusyAsync($"Downloading {app.Name}…", async cancellationToken =>
         {
             var path = await _ipatoolService.DownloadAsync(
+                account,
                 app,
                 _configurationService.Current.DownloadDirectory,
                 VaultPassphrase,
-                SelectedVersionIdentifier);
-            StatusMessage = $"Download complete: {Path.GetFileName(path)}";
-            _addActivity("IPA download complete", $"{app.Name} — {Path.GetFileName(path)}", true);
+                SelectedVersionIdentifier,
+                cancellationToken: cancellationToken);
+            StatusMessage = $"Download complete for {account.Email}: {Path.GetFileName(path)}";
+            _addActivity(
+                "IPA download complete",
+                $"{account.Email} — {app.Name} — {Path.GetFileName(path)}",
+                true);
             IpaDownloaded?.Invoke(this, path);
         });
     }
 
-    private async Task RunBusyAsync(string title, Func<Task> action)
+    private async Task RunBusyAsync(
+        string title,
+        Func<CancellationToken, Task> action)
     {
+        using var operationCancellation = new CancellationTokenSource();
+        _operationCancellation = operationCancellation;
         IsBusy = true;
         OperationTitle = title;
         try
         {
-            await action();
+            await action(operationCancellation.Token);
+        }
+        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
+        {
+            StatusMessage = "App Store operation canceled.";
         }
         catch (Exception exception)
         {
+            if (exception is IpatoolAccountSessionException)
+            {
+                SetActiveAccount(null);
+            }
+
             StatusMessage = exception.Message;
             _addActivity("App Store operation failed", exception.Message, false);
         }
         finally
         {
+            if (ReferenceEquals(_operationCancellation, operationCancellation))
+            {
+                _operationCancellation = null;
+            }
+
             IsBusy = false;
             OperationTitle = string.Empty;
+            CompleteLeaveStoreCleanup();
         }
     }
 
@@ -417,6 +993,11 @@ public sealed class StoreViewModel : ObservableObject
         SearchCommand.NotifyCanExecuteChanged();
         DownloadCommand.NotifyCanExecuteChanged();
         LoadVersionsCommand.NotifyCanExecuteChanged();
+        AddAccountCommand.NotifyCanExecuteChanged();
+        CancelAccountEditCommand.NotifyCanExecuteChanged();
+        RequestRemoveAccountCommand.NotifyCanExecuteChanged();
+        CancelRemoveAccountCommand.NotifyCanExecuteChanged();
+        ConfirmRemoveAccountCommand.NotifyCanExecuteChanged();
     }
 
     private static string BuildVersionStatusMessage(

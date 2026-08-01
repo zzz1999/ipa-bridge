@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using IPABridge.Models;
 using IPABridge.ViewModels;
 
 namespace IPABridge.Views;
@@ -15,7 +16,7 @@ public partial class StoreView : UserControl
         DataContextChanged += OnDataContextChanged;
         Unloaded += (_, _) =>
         {
-            _storeViewModel?.ClearSecrets();
+            _storeViewModel?.LeaveStore();
             DetachViewModel();
         };
     }
@@ -90,6 +91,17 @@ public partial class StoreView : UserControl
         if (DataContext is MainViewModel viewModel)
         {
             viewModel.Store.VaultPassphrase = VaultPassphraseBox.Password;
+        }
+    }
+
+    private async void AppleAccountSelector_OnSelectionChanged(
+        object sender,
+        SelectionChangedEventArgs eventArgs)
+    {
+        if (DataContext is MainViewModel viewModel &&
+            AppleAccountSelector.SelectedItem is AppleAccountProfile account)
+        {
+            await viewModel.Store.SelectAccountAsync(account);
         }
     }
 }

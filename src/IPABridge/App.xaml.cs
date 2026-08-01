@@ -142,7 +142,17 @@ public partial class App : Application
         if (view is StoreView store)
         {
             VerifyEditorViewport(store.StoreSearchBox, "App Store search input");
+            VerifyEditorViewport(store.AppleAccountEmailBox, "Apple Account email input");
             VerifyEditorViewport(store.ApplePasswordBox, "Apple Account password input");
+            VerifyEditorViewport(store.VaultPassphraseBox, "local vault passphrase input");
+            if (store.AppleAccountSelector.ActualWidth <= 0 ||
+                store.AppleAccountSelector.ActualHeight <= 0 ||
+                store.AddAppleAccountButton.ActualWidth < 40 ||
+                store.AddAppleAccountButton.ActualHeight < 40)
+            {
+                throw new InvalidOperationException(
+                    "The Apple Account selector or add button is not available in the account card.");
+            }
         }
     }
 

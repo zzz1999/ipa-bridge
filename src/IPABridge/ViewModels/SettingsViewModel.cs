@@ -139,21 +139,6 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-    public string AppleAccountEmail
-    {
-        get => _configurationService.Current.AppleAccountEmail;
-        set
-        {
-            if (string.Equals(_configurationService.Current.AppleAccountEmail, value, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            _configurationService.Current.AppleAccountEmail = value;
-            OnPropertyChanged();
-        }
-    }
-
     public bool AutomaticallyRefreshDevices
     {
         get => _configurationService.Current.AutomaticallyRefreshDevices;

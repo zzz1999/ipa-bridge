@@ -12,20 +12,54 @@ public sealed partial class IpatoolService
     private readonly ToolLocationService _toolLocationService;
     private readonly ProcessRunner _processRunner;
     private readonly ConPtyProcessRunner _conPtyProcessRunner;
+    private readonly string _accountSessionsRoot;
     private readonly ConcurrentDictionary<string, StoreAppVersion> _versionMetadataCache =
         new(StringComparer.Ordinal);
 
     public IpatoolService(
         ToolLocationService toolLocationService,
         ProcessRunner processRunner,
-        ConPtyProcessRunner conPtyProcessRunner)
+        ConPtyProcessRunner conPtyProcessRunner,
+        string? accountSessionsRoot = null)
     {
         _toolLocationService = toolLocationService;
         _processRunner = processRunner;
         _conPtyProcessRunner = conPtyProcessRunner;
+        _accountSessionsRoot = Path.GetFullPath(
+            accountSessionsRoot ?? AppPaths.IpatoolAccountsDirectory);
     }
 
     public bool IsAvailable => _toolLocationService.ResolveIpatool() is not null;
+
+    public void RemoveLocalAccountSession(AppleAccountProfile account)
+    {
+        var accountDirectory = GetAccountHomeDirectory(account.Id);
+        var accountsRoot = Path.TrimEndingDirectorySeparator(_accountSessionsRoot);
+        if (!accountDirectory.StartsWith(
+                accountsRoot + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The Apple Account session path is outside the managed account directory.");
+        }
+
+        if (Directory.Exists(accountDirectory))
+        {
+            Directory.Delete(accountDirectory, recursive: true);
+        }
+
+        InvalidateAccountCache(account);
+    }
+
+    public void InvalidateAccountCache(AppleAccountProfile account)
+    {
+        var prefix = $"account:{account.Id}|";
+        foreach (var cacheKey in _versionMetadataCache.Keys.Where(key =>
+                     key.StartsWith(prefix, StringComparison.Ordinal)))
+        {
+            _versionMetadataCache.TryRemove(cacheKey, out _);
+        }
+    }
 
     public async Task<string?> GetVersionAsync(CancellationToken cancellationToken = default)
     {
@@ -49,7 +83,7 @@ public sealed partial class IpatoolService
     }
 
     public async Task<IpatoolLoginResult> LoginAsync(
-        string email,
+        AppleAccountProfile account,
         string applePassword,
         string? twoFactorCode,
         string vaultPassphrase,
@@ -64,8 +98,9 @@ public sealed partial class IpatoolService
         };
         var result = await _conPtyProcessRunner.RunAsync(
             executable,
-            ["--format", "json", "auth", "login", "--email", email],
+            ["--format", "json", "auth", "login", "--email", account.Email],
             prompts,
+            environment: GetAccountEnvironment(account),
             cancellationToken: cancellationToken);
 
         if (result.MissingPromptKey == "two-factor")
@@ -86,7 +121,12 @@ public sealed partial class IpatoolService
 
         if (IpatoolJsonParser.HasSuccessfulLogin(result.Output))
         {
-            return new IpatoolLoginResult(true, false, "Apple account connected.");
+            var accountInfo = IpatoolJsonParser.ParseAccountInfo(result.Output);
+            return new IpatoolLoginResult(
+                true,
+                false,
+                "Apple Account connected in its isolated local session.",
+                accountInfo);
         }
 
         var error = IpatoolJsonParser.FindError(result.Output)
@@ -95,23 +135,28 @@ public sealed partial class IpatoolService
     }
 
     public async Task<IReadOnlyList<StoreApp>> SearchAsync(
+        AppleAccountProfile account,
         string query,
         string vaultPassphrase,
         CancellationToken cancellationToken = default)
     {
+        await EnsureAccountMatchesAsync(account, vaultPassphrase, cancellationToken);
         var result = await RunAuthenticatedAsync(
-            ["--format", "json", "search", query, "--limit", "25", "--platform", "iphone"],
+            account,
+            ["--format", "json", "search", query, "--limit", "25"],
             vaultPassphrase,
             cancellationToken: cancellationToken);
         EnsureSuccess(result, "Search failed");
         return IpatoolJsonParser.ParseSearchResults(result.Output);
     }
 
-    public async Task<bool> HasStoredAccountAsync(
+    public async Task<IpatoolAccountInfo?> GetStoredAccountAsync(
+        AppleAccountProfile account,
         string vaultPassphrase,
         CancellationToken cancellationToken = default)
     {
         var result = await RunAuthenticatedAsync(
+            account,
             ["--format", "json", "auth", "info"],
             vaultPassphrase,
             cancellationToken: cancellationToken);
@@ -123,14 +168,13 @@ public sealed partial class IpatoolService
 
         if (result.IsSuccess && IpatoolJsonParser.HasSuccess(result.Output))
         {
-            return true;
+            return IpatoolJsonParser.ParseAccountInfo(result.Output);
         }
 
         var error = IpatoolJsonParser.FindError(result.Output);
-        if (error?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true ||
-            error?.Contains("no account", StringComparison.OrdinalIgnoreCase) == true)
+        if (IsAccountNotFoundError(error))
         {
-            return false;
+            return null;
         }
 
         throw new InvalidOperationException(
@@ -139,6 +183,7 @@ public sealed partial class IpatoolService
     }
 
     public async Task<string> DownloadAsync(
+        AppleAccountProfile account,
         StoreApp app,
         string outputDirectory,
         string vaultPassphrase,
@@ -146,6 +191,7 @@ public sealed partial class IpatoolService
         Action<string>? outputReceived = null,
         CancellationToken cancellationToken = default)
     {
+        await EnsureAccountMatchesAsync(account, vaultPassphrase, cancellationToken);
         outputDirectory = Path.GetFullPath(outputDirectory);
         Directory.CreateDirectory(outputDirectory);
         var fileName = $"{SanitizeFileName(app.BundleIdentifier)}_{DateTime.Now:yyyyMMdd_HHmmss}.ipa";
@@ -165,8 +211,6 @@ public sealed partial class IpatoolService
                 app.BundleIdentifier,
                 "--output",
                 stagedPath,
-                "--platform",
-                "iphone",
                 "--purchase"
             };
             if (!string.IsNullOrWhiteSpace(externalVersionIdentifier))
@@ -176,6 +220,7 @@ public sealed partial class IpatoolService
             }
 
             var result = await RunAuthenticatedAsync(
+                account,
                 arguments,
                 vaultPassphrase,
                 outputReceived,
@@ -204,11 +249,13 @@ public sealed partial class IpatoolService
     }
 
     public async Task<IReadOnlyList<StoreAppVersion>> ListVersionsAsync(
+        AppleAccountProfile account,
         StoreApp app,
         string vaultPassphrase,
         IProgress<StoreVersionLookupProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        await EnsureAccountMatchesAsync(account, vaultPassphrase, cancellationToken);
         var listArguments = new List<string>
         {
             "--format",
@@ -217,6 +264,7 @@ public sealed partial class IpatoolService
         };
         AppendAppIdentifier(listArguments, app);
         var result = await RunAuthenticatedAsync(
+            account,
             listArguments,
             vaultPassphrase,
             cancellationToken: cancellationToken);
@@ -236,12 +284,13 @@ public sealed partial class IpatoolService
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var cacheKey = BuildVersionMetadataCacheKey(app, identifier);
+                var cacheKey = BuildVersionMetadataCacheKey(account, app, identifier);
                 if (!_versionMetadataCache.TryGetValue(cacheKey, out var version))
                 {
                     try
                     {
                         version = await GetVersionMetadataAsync(
+                            account,
                             app,
                             identifier,
                             vaultPassphrase,
@@ -277,6 +326,7 @@ public sealed partial class IpatoolService
     }
 
     private async Task<StoreAppVersion> GetVersionMetadataAsync(
+        AppleAccountProfile account,
         StoreApp app,
         string externalVersionIdentifier,
         string vaultPassphrase,
@@ -293,6 +343,7 @@ public sealed partial class IpatoolService
         arguments.Add(externalVersionIdentifier);
 
         var result = await RunAuthenticatedAsync(
+            account,
             arguments,
             vaultPassphrase,
             cancellationToken: cancellationToken);
@@ -301,6 +352,7 @@ public sealed partial class IpatoolService
     }
 
     private async Task<ConPtyResult> RunAuthenticatedAsync(
+        AppleAccountProfile account,
         IEnumerable<string> arguments,
         string vaultPassphrase,
         Action<string>? outputReceived = null,
@@ -315,7 +367,76 @@ public sealed partial class IpatoolService
             arguments,
             prompts,
             outputReceived,
+            GetAccountEnvironment(account),
             cancellationToken);
+    }
+
+    private async Task EnsureAccountMatchesAsync(
+        AppleAccountProfile account,
+        string vaultPassphrase,
+        CancellationToken cancellationToken)
+    {
+        var accountInfo = await GetStoredAccountAsync(
+            account,
+            vaultPassphrase,
+            cancellationToken);
+        if (accountInfo is null)
+        {
+            throw new IpatoolAccountSessionException(
+                $"Sign in to {account.Email} before using its App Store region.");
+        }
+
+        if (!string.Equals(
+                accountInfo.Email,
+                account.Email,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IpatoolAccountSessionException(
+                $"The selected profile is {account.Email}, but its isolated ipatool session " +
+                $"contains {accountInfo.Email}. Reconnect the selected account before continuing.");
+        }
+    }
+
+    private IReadOnlyDictionary<string, string> GetAccountEnvironment(
+        AppleAccountProfile account)
+    {
+        var homeDirectory = GetAccountHomeDirectory(account.Id);
+        Directory.CreateDirectory(homeDirectory);
+        return BuildAccountEnvironment(homeDirectory);
+    }
+
+    private string GetAccountHomeDirectory(string accountId)
+    {
+        if (!Guid.TryParseExact(accountId, "N", out _))
+        {
+            throw new ArgumentException("The Apple Account profile ID is invalid.", nameof(accountId));
+        }
+
+        return Path.GetFullPath(Path.Combine(_accountSessionsRoot, accountId));
+    }
+
+    internal static IReadOnlyDictionary<string, string> BuildAccountEnvironment(
+        string homeDirectory)
+    {
+        homeDirectory = Path.GetFullPath(homeDirectory);
+        var homeDrive = Path.GetPathRoot(homeDirectory)?.TrimEnd(
+            Path.DirectorySeparatorChar,
+            Path.AltDirectorySeparatorChar);
+        if (string.IsNullOrWhiteSpace(homeDrive) ||
+            homeDirectory.Length <= homeDrive.Length)
+        {
+            throw new ArgumentException(
+                "The Apple Account session directory must be an absolute local path.",
+                nameof(homeDirectory));
+        }
+
+        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["HOME"] = homeDirectory,
+            ["USERPROFILE"] = homeDirectory,
+            ["HOMEDRIVE"] = homeDrive,
+            ["HOMEPATH"] = homeDirectory[homeDrive.Length..]
+        };
     }
 
     private static void EnsureSuccess(ConPtyResult result, string operation)
@@ -332,6 +453,13 @@ public sealed partial class IpatoolService
             throw new InvalidOperationException(
                 $"{operation}: {error ?? "ipatool returned an error status."}");
         }
+    }
+
+    internal static bool IsAccountNotFoundError(string? error)
+    {
+        return error?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true ||
+               error?.Contains("could not be found", StringComparison.OrdinalIgnoreCase) == true ||
+               error?.Contains("no account", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private string RequireExecutable()
@@ -362,13 +490,14 @@ public sealed partial class IpatoolService
     }
 
     private static string BuildVersionMetadataCacheKey(
+        AppleAccountProfile account,
         StoreApp app,
         string externalVersionIdentifier)
     {
         var appIdentifier = app.Id > 0
             ? $"id:{app.Id.ToString(CultureInfo.InvariantCulture)}"
             : $"bundle:{app.BundleIdentifier}";
-        return $"{appIdentifier}|version:{externalVersionIdentifier}";
+        return $"account:{account.Id}|{appIdentifier}|version:{externalVersionIdentifier}";
     }
 
     private static string SanitizeFileName(string value)

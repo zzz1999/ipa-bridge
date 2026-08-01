@@ -69,13 +69,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             new NavigationItem { Label = "Settings", Glyph = "\uE713", Page = NavigationPage.Settings }
         ];
 
-        NavigateCommand = new RelayCommand(parameter =>
-        {
-            if (parameter is NavigationPage page)
+        NavigateCommand = new RelayCommand(
+            parameter =>
             {
-                CurrentPage = page;
-            }
-        });
+                if (parameter is NavigationPage page)
+                {
+                    CurrentPage = page;
+                }
+            },
+            parameter => parameter is NavigationPage page &&
+                         (CurrentPage != NavigationPage.Store ||
+                          page == NavigationPage.Store ||
+                          !Store.IsBusy));
         QueueIpaCommand = new RelayCommand(parameter =>
         {
             if (parameter is LocalIpa ipa)
@@ -97,6 +102,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Settings.ToolsChanged += SettingsOnToolsChanged;
         Settings.PropertyChanged += ChildPropertyChanged;
         Devices.PropertyChanged += ChildPropertyChanged;
+        Store.PropertyChanged += StorePropertyChanged;
     }
 
     public IReadOnlyList<NavigationItem> NavigationItems { get; }
@@ -122,10 +128,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         get => _currentPage;
         set
         {
+            if (_currentPage == NavigationPage.Store &&
+                value != NavigationPage.Store &&
+                Store.IsBusy)
+            {
+                return;
+            }
+
             if (_currentPage == NavigationPage.Store && value != NavigationPage.Store)
             {
                 // Discard the view-model copies of user-entered secrets when leaving the Store page.
-                Store.ClearSecrets();
+                Store.LeaveStore();
             }
 
             if (!SetProperty(ref _currentPage, value))
@@ -249,7 +262,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            Store.LoadConfiguration();
+            Store.RefreshToolAvailability();
             await Devices.RefreshAsync();
             OnPropertyChanged(nameof(OverallReadiness));
         }
@@ -269,11 +282,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void StorePropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
+    {
+        if (eventArgs.PropertyName == nameof(StoreViewModel.IsBusy))
+        {
+            NavigateCommand.NotifyCanExecuteChanged();
+        }
+    }
+
     public void Dispose()
     {
         Store.IpaDownloaded -= StoreOnIpaDownloaded;
         Settings.ToolsChanged -= SettingsOnToolsChanged;
-        Store.ClearSecrets();
+        Store.PropertyChanged -= StorePropertyChanged;
+        Store.LeaveStore();
         Settings.Dispose();
         Devices.Dispose();
         _toolBootstrapService.Dispose();

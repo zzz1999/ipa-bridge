@@ -37,14 +37,40 @@ public static partial class IpatoolJsonParser
 
     public static bool HasSuccessfulLogin(string output)
     {
-        return ParseElements(output).Any(root =>
-            ReadBoolean(root, "success") &&
-            root.TryGetProperty("email", out _));
+        return TryParseAccountInfo(output) is not null;
+    }
+
+    public static IpatoolAccountInfo ParseAccountInfo(string output)
+    {
+        return TryParseAccountInfo(output)
+               ?? throw new InvalidDataException(
+                   "ipatool did not return recognizable Apple Account information.");
     }
 
     public static bool HasSuccess(string output)
     {
         return ParseElements(output).Any(root => ReadBoolean(root, "success"));
+    }
+
+    private static IpatoolAccountInfo? TryParseAccountInfo(string output)
+    {
+        foreach (var root in ParseElements(output).Reverse())
+        {
+            if (!ReadBoolean(root, "success"))
+            {
+                continue;
+            }
+
+            var email = ReadString(root, "email").Trim();
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                continue;
+            }
+
+            return new IpatoolAccountInfo(email, ReadString(root, "name").Trim());
+        }
+
+        return null;
     }
 
     public static string? FindDownloadedPath(string output)
