@@ -15,6 +15,7 @@
     <IPABridgeSourceRevision Condition="'$(GITHUB_SHA)' != ''">$(GITHUB_SHA)</IPABridgeSourceRevision>
     <IPABridgeSourceRevision Condition="'$(IPABridgeSourceRevision)' == ''">development</IPABridgeSourceRevision>
     <InformationalVersion>$(Version)+$(IPABridgeSourceRevision)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\IPA-Bridge.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

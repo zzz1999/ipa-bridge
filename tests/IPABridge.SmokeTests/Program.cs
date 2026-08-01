@@ -402,6 +402,10 @@ Check(
     !(await currentBuildService.CheckAsync()).IsUpdateAvailable &&
     currentBuildService.CurrentBuildLabel == $"Build {latestRevision[..7]}",
     "the update checker recognizes the currently published commit");
+Check(
+    ApplicationUpdateService.ExtractSourceRevision(
+        $"0.1.0+{latestRevision}.{latestRevision}") == latestRevision,
+    "the update checker tolerates duplicate SDK source-revision metadata");
 
 var accountInfo = IpatoolJsonParser.ParseAccountInfo(
     """{"level":"info","name":"Example User","email":"user@example.invalid","success":true}""");

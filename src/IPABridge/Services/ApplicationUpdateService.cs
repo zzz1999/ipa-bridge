@@ -94,10 +94,28 @@ public sealed class ApplicationUpdateService
         var informationalVersion = Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion;
+        return ExtractSourceRevision(informationalVersion);
+    }
+
+    internal static string ExtractSourceRevision(string? informationalVersion)
+    {
         var separator = informationalVersion?.LastIndexOf('+') ?? -1;
-        return separator >= 0 && separator + 1 < informationalVersion!.Length
-            ? informationalVersion[(separator + 1)..]
-            : string.Empty;
+        if (separator < 0 || separator + 1 >= informationalVersion!.Length)
+        {
+            return string.Empty;
+        }
+
+        foreach (var component in informationalVersion[(separator + 1)..]
+                     .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var revision = NormalizeRevision(component);
+            if (IsComparableRevision(revision))
+            {
+                return revision;
+            }
+        }
+
+        return string.Empty;
     }
 
     private static bool HasExecutableAsset(JsonElement release)
