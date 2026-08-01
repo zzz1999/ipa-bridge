@@ -261,17 +261,19 @@
                     Content="Choose…" />
           </Grid>
 
-          <Grid Margin="0,18,0,0">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="150" />
-              <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="Automatic device refresh" />
-            <CheckBox Grid.Column="1"
-                      VerticalAlignment="Center"
-                      IsChecked="{Binding Settings.AutomaticallyRefreshDevices}"
-                      Content="Check for connected devices every 8 seconds" />
-          </Grid>
+          <CheckBox Margin="0,18,0,0"
+                    AutomationProperties.HelpText="Checks for connected devices every 8 seconds"
+                    AutomationProperties.Name="Automatic device refresh"
+                    IsChecked="{Binding Settings.AutomaticallyRefreshDevices, Mode=TwoWay}"
+                    IsThreeState="False"
+                    Style="{StaticResource ToggleSwitchStyle}">
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock FontWeight="SemiBold" Text="Automatic device refresh" />
+              <TextBlock Margin="0,4,0,0"
+                         Style="{StaticResource CaptionTextStyle}"
+                         Text="Check for connected devices every 8 seconds" />
+            </StackPanel>
+          </CheckBox>
 
           <Grid Margin="0,20,0,0">
             <Grid.ColumnDefinitions>

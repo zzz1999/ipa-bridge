@@ -694,6 +694,123 @@
     </Setter>
   </Style>
 
+  <Style x:Key="ToggleSwitchFocusVisualStyle" TargetType="Control">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Border Width="58"
+                  Height="38"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Center"
+                  BorderBrush="#661677FF"
+                  BorderThickness="2"
+                  CornerRadius="19"
+                  IsHitTestVisible="False" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="ToggleSwitchStyle" TargetType="CheckBox">
+    <Setter Property="MinHeight" Value="48" />
+    <Setter Property="FontFamily" Value="{StaticResource AppFont}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource ToggleSwitchFocusVisualStyle}" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="CheckBox">
+          <Grid MinHeight="{TemplateBinding MinHeight}"
+                Background="Transparent"
+                SnapsToDevicePixels="True">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ContentPresenter VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                              Content="{TemplateBinding Content}"
+                              ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              RecognizesAccessKey="True" />
+            <Grid Grid.Column="1"
+                  Width="58"
+                  Height="44"
+                  Margin="20,0,0,0"
+                  IsHitTestVisible="False">
+              <Border x:Name="SwitchTrack"
+                      Width="52"
+                      Height="32"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Background="#E5E5EA"
+                      CornerRadius="16">
+                <Border x:Name="SwitchThumb"
+                        Width="26"
+                        Height="26"
+                        Margin="3,0,0,0"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        Background="White"
+                        CornerRadius="13">
+                  <Border.Effect>
+                    <DropShadowEffect BlurRadius="5"
+                                      Direction="270"
+                                      Opacity="0.22"
+                                      ShadowDepth="1"
+                                      Color="#24324A" />
+                  </Border.Effect>
+                </Border>
+              </Border>
+            </Grid>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="SwitchTrack" Property="Background" Value="{StaticResource AccentBrush}" />
+              <Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right" />
+              <Setter TargetName="SwitchThumb" Property="Margin" Value="0,0,3,0" />
+            </Trigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsChecked" Value="False" />
+                <Condition Property="IsMouseOver" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="SwitchTrack" Property="Background" Value="#D9D9DE" />
+            </MultiTrigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsChecked" Value="True" />
+                <Condition Property="IsMouseOver" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="SwitchTrack" Property="Background" Value="#2D86FF" />
+            </MultiTrigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsChecked" Value="False" />
+                <Condition Property="IsPressed" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="SwitchTrack" Property="Background" Value="#CDCDD3" />
+            </MultiTrigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsChecked" Value="True" />
+                <Condition Property="IsPressed" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="SwitchTrack" Property="Background" Value="{StaticResource AccentDarkBrush}" />
+            </MultiTrigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Cursor" Value="Arrow" />
+              <Setter Property="Opacity" Value="0.42" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <Style TargetType="ScrollBar">
     <Setter Property="Width" Value="14" />
     <Setter Property="MinWidth" Value="14" />

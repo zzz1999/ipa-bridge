@@ -228,13 +228,12 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _installationLog, value);
     }
 
+    internal bool IsAutomaticRefreshTimerEnabled => _refreshTimer.IsEnabled;
+
     public async Task InitializeAsync()
     {
         await RefreshPrerequisitesAsync();
-        if (_configurationService.Current.AutomaticallyRefreshDevices)
-        {
-            _refreshTimer.Start();
-        }
+        ApplyAutomaticRefreshPreference();
 
         if (HasAppleDeviceSupport && AreDeviceToolsAvailable)
         {
@@ -256,15 +255,7 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
     public void ApplyAppleDeviceSupportStatus(AppleDeviceSupportStatus status)
     {
         AppleDeviceSupport = status;
-        if (_configurationService.Current.AutomaticallyRefreshDevices)
-        {
-            _refreshTimer.Start();
-        }
-        else
-        {
-            _refreshTimer.Stop();
-        }
-
+        ApplyAutomaticRefreshPreference();
         OnPropertyChanged(nameof(AreDeviceToolsAvailable));
         OnPropertyChanged(nameof(DeviceToolsLabel));
         PairCommand.NotifyCanExecuteChanged();
@@ -285,6 +276,18 @@ public sealed class DevicesViewModel : ObservableObject, IDisposable
         else
         {
             StatusMessage = AppleDeviceSupportDetail;
+        }
+    }
+
+    internal void ApplyAutomaticRefreshPreference()
+    {
+        if (_configurationService.Current.AutomaticallyRefreshDevices)
+        {
+            _refreshTimer.Start();
+        }
+        else
+        {
+            _refreshTimer.Stop();
         }
     }
 

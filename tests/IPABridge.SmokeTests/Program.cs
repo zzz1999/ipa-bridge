@@ -558,6 +558,22 @@ try
         settingsViewModel.DeviceToolsStatus == "Configured — idevice-tools",
         "file-only device tools detection is labeled configured rather than ready");
 
+    configurationService.Current.AutomaticallyRefreshDevices = false;
+    devicesViewModel.ApplyAutomaticRefreshPreference();
+    Check(
+        !devicesViewModel.IsAutomaticRefreshTimerEnabled,
+        "automatic device refresh timer stops when the preference is disabled");
+    configurationService.Current.AutomaticallyRefreshDevices = true;
+    devicesViewModel.ApplyAutomaticRefreshPreference();
+    Check(
+        devicesViewModel.IsAutomaticRefreshTimerEnabled,
+        "automatic device refresh timer starts when the preference is enabled");
+    configurationService.Current.AutomaticallyRefreshDevices = false;
+    devicesViewModel.ApplyAutomaticRefreshPreference();
+    Check(
+        !devicesViewModel.IsAutomaticRefreshTimerEnabled,
+        "automatic device refresh timer supports repeated preference changes");
+
     devicesViewModel.ApplyAppleDeviceSupportStatus(readyAppleSupport);
     var staleDevice = new ConnectedDevice
     {

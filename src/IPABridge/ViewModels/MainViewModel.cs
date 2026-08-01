@@ -274,6 +274,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void ChildPropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
     {
+        if (sender == Settings &&
+            eventArgs.PropertyName == nameof(SettingsViewModel.AutomaticallyRefreshDevices))
+        {
+            Devices.ApplyAutomaticRefreshPreference();
+        }
+
         if (eventArgs.PropertyName is nameof(SettingsViewModel.IpatoolStatus)
             or nameof(SettingsViewModel.DeviceToolsStatus)
             or nameof(DevicesViewModel.HasAppleDeviceSupport))
