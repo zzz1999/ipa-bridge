@@ -23,7 +23,7 @@ if (fakeIpatoolMode == "login-two-factor")
     var twoFactorCode = Console.ReadLine();
     if (twoFactorCode != "123456")
     {
-        Console.WriteLine("{\"level\":\"error\",\"error\":\"wrong verification code\",\"success\":false}");
+        Console.WriteLine("{\"level\":\"error\",\"error\":\"something went wrong\",\"success\":false}");
         return 8;
     }
 
@@ -75,7 +75,10 @@ if (fakeIpatoolMode == "login-wait")
     return 0;
 }
 
-if (fakeIpatoolMode is "download-failure" or "download-success" or "search-success")
+if (fakeIpatoolMode is "download-failure" or
+    "download-success" or
+    "search-success" or
+    "search-unicode")
 {
     Console.Write("enter passphrase to unlock");
     var passphrase = Console.ReadLine();
@@ -93,14 +96,15 @@ if (fakeIpatoolMode is "download-failure" or "download-success" or "search-succe
         return 0;
     }
 
-    if (fakeIpatoolMode == "search-success")
+    if (fakeIpatoolMode is "search-success" or "search-unicode")
     {
+        var expectedQuery = fakeIpatoolMode == "search-unicode" ? "\u6296" : "bridge";
         string[] expectedSearchArguments =
         [
             "--format",
             "json",
             "search",
-            "bridge",
+            expectedQuery,
             "--limit",
             "25"
         ];
@@ -1640,6 +1644,7 @@ else
                 (_, _, _) => { });
             twoFactorStore.LoadConfiguration();
             twoFactorStore.AddAccountCommand.Execute(null);
+            twoFactorStore.SearchQuery = "layout";
             twoFactorStore.Email = "twofactor@example.invalid";
             twoFactorStore.ApplePassword = "temporary-apple-secret";
             Environment.SetEnvironmentVariable(
@@ -1658,6 +1663,9 @@ else
                 .GetValue(twoFactorStore) as string;
             Check(
                 twoFactorStore.RequiresTwoFactor &&
+                !twoFactorStore.SearchCommand.CanExecute(null) &&
+                twoFactorStore.SearchActionHelp ==
+                "Finish Apple verification before searching." &&
                 twoFactorStore.ApplePassword == "temporary-apple-secret" &&
                 twoFactorStore.Accounts.Count == 0 &&
                 twoFactorConfiguration.Current.AppleAccounts.Count == 0 &&
@@ -1707,7 +1715,9 @@ else
                 twoFactorStore.RequiresTwoFactor &&
                 twoFactorStore.ApplePassword == "temporary-apple-secret" &&
                 twoFactorStore.TwoFactorCode.Length == 0 &&
-                twoFactorStore.Accounts.Count == 0,
+                twoFactorStore.Accounts.Count == 0 &&
+                twoFactorStore.StatusMessage ==
+                "Apple verification was not accepted. Check the six-digit code and try again.",
                 "a rejected verification code keeps the challenge open and clears only the code");
 
             twoFactorStore.TwoFactorCode = "123456";
@@ -1721,7 +1731,10 @@ else
                 savedTwoFactorAccount.Email == "twofactor@example.invalid" &&
                 savedTwoFactorAccount.LocalVaultKey == transientVaultKey &&
                 Convert.FromBase64String(savedTwoFactorAccount.LocalVaultKey).Length ==
-                LocalDataProtectionService.MasterKeySize,
+                LocalDataProtectionService.MasterKeySize &&
+                twoFactorStore.SearchCommand.CanExecute(null) &&
+                twoFactorStore.SearchActionHelp ==
+                $"Search {savedTwoFactorAccount.Email}'s App Store region.",
                 "successful verification saves the generated vault key and clears transient Apple secrets");
             Check(
                 File.Exists(twoFactorConfigurationPath) &&
@@ -2064,6 +2077,18 @@ else
             fakeSearchResults.Count == 1 &&
             fakeSearchResults[0].BundleIdentifier == "com.example.bridge",
             "search uses the pinned v2.3.1 flags inside the selected account environment");
+
+        Environment.SetEnvironmentVariable(
+            "IPA_BRIDGE_SMOKE_FAKE_IPATOOL",
+            "search-unicode");
+        var unicodeSearchResults = await fakeIpatool.SearchAsync(
+            fakeAccount,
+            "\u6296",
+            "temporary-vault-secret");
+        Check(
+            unicodeSearchResults.Count == 1 &&
+            unicodeSearchResults[0].BundleIdentifier == "com.example.bridge",
+            "non-Latin App Store search text is preserved in the ipatool argument list");
 
         var mismatchedAccount = new AppleAccountProfile
         {

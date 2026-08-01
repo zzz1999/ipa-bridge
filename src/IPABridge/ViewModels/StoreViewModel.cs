@@ -171,6 +171,46 @@ public sealed class StoreViewModel : ObservableObject
                 ? "Select an account to choose an App Store region."
                 : "Add an Apple Account to choose an App Store region.";
 
+    public string SearchActionHelp
+    {
+        get
+        {
+            if (!_ipatoolService.IsAvailable)
+            {
+                return "Install ipatool before searching.";
+            }
+
+            if (RequiresTwoFactor)
+            {
+                return "Finish Apple verification before searching.";
+            }
+
+            if (IsAddingAccount)
+            {
+                return "Finish adding or cancel this Apple Account before searching.";
+            }
+
+            if (SelectedAccount is null)
+            {
+                return "Select an Apple Account before searching.";
+            }
+
+            if (!HasLocalVaultKey(SelectedAccount))
+            {
+                return "Reset this profile's local session and sign in before searching.";
+            }
+
+            if (!IsLoggedIn)
+            {
+                return "Check the selected account session or sign in before searching.";
+            }
+
+            return string.IsNullOrWhiteSpace(SearchQuery)
+                ? "Enter an app name to search."
+                : $"Search {SelectedAccount.Email}'s App Store region.";
+        }
+    }
+
     public string AccountFormTitle => IsAddingAccount
         ? "Add Apple Account"
         : SelectedAccount is null
@@ -245,6 +285,7 @@ public sealed class StoreViewModel : ObservableObject
             if (SetProperty(ref _searchQuery, value))
             {
                 SearchCommand.NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(SearchActionHelp));
             }
         }
     }
@@ -833,6 +874,25 @@ public sealed class StoreViewModel : ObservableObject
         return value.Length == 6 && value.All(character => character is >= '0' and <= '9');
     }
 
+    private static string BuildLoginStatusMessage(
+        IpatoolLoginResult result,
+        bool wasVerifyingTwoFactor)
+    {
+        if (!wasVerifyingTwoFactor || result.Success)
+        {
+            return result.Message;
+        }
+
+        var normalizedMessage = result.Message.Trim().TrimEnd('.');
+        return normalizedMessage.Length == 0 ||
+               string.Equals(
+                   normalizedMessage,
+                   "something went wrong",
+                   StringComparison.OrdinalIgnoreCase)
+            ? "Apple verification was not accepted. Check the six-digit code and try again."
+            : result.Message;
+    }
+
     private static string BuildAccountReadyMessage(AppleAccountProfile account)
     {
         return HasLocalVaultKey(account)
@@ -935,7 +995,7 @@ public sealed class StoreViewModel : ObservableObject
                 OnPropertyChanged(nameof(RequiresTwoFactor));
             }
 
-            StatusMessage = result.Message;
+            StatusMessage = BuildLoginStatusMessage(result, wasVerifyingTwoFactor);
             if (result.Success && result.Account is not null)
             {
                 _ipatoolService.InvalidateAccountCache(account);
@@ -1262,6 +1322,7 @@ public sealed class StoreViewModel : ObservableObject
 
     private void NotifyCommands()
     {
+        OnPropertyChanged(nameof(SearchActionHelp));
         LoginCommand.NotifyCanExecuteChanged();
         CheckAccountCommand.NotifyCanExecuteChanged();
         SearchCommand.NotifyCanExecuteChanged();

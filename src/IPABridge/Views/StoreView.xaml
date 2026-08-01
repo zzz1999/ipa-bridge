@@ -30,8 +30,11 @@
               <KeyBinding Key="Enter" Command="{Binding Store.SearchCommand}" />
             </TextBox.InputBindings>
           </TextBox>
-          <Button Grid.Column="2"
+          <Button x:Name="StoreSearchButton"
+                  Grid.Column="2"
                   MinWidth="92"
+                  ToolTip="{Binding Store.SearchActionHelp}"
+                  ToolTipService.ShowOnDisabled="True"
                   Style="{StaticResource PrimaryButtonStyle}"
                   Command="{Binding Store.SearchCommand}"
                   Content="Search Apps" />
@@ -553,16 +556,19 @@
                            Text="{Binding Store.TwoFactorCode, UpdateSourceTrigger=PropertyChanged}" />
                   <Grid Margin="0,14,0,0">
                     <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="8" />
                       <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Button x:Name="TwoFactorBackButton"
+                            MinWidth="64"
+                            Padding="14,11"
                             Command="{Binding Store.CancelTwoFactorCommand}"
                             Content="Back"
                             Style="{StaticResource SecondaryButtonStyle}" />
                     <Button x:Name="TwoFactorVerifyButton"
                             Grid.Column="2"
+                            MinWidth="160"
                             AutomationProperties.Name="Verify Apple two-factor code and continue"
                             Command="{Binding Store.LoginCommand}"
                             Content="Verify &amp; Continue"

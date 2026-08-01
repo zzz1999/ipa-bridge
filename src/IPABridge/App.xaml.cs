@@ -322,6 +322,7 @@ public partial class App : Application
             mainViewModel.Store.AddAccountCommand.Execute(null);
             mainViewModel.Store.Email = "layout@example.invalid";
             mainViewModel.Store.ApplePassword = "layout-only-secret";
+            mainViewModel.Store.SearchQuery = "layout";
             typeof(StoreViewModel)
                 .GetProperty(nameof(StoreViewModel.RequiresTwoFactor))!
                 .SetValue(mainViewModel.Store, true);
@@ -353,6 +354,26 @@ public partial class App : Application
                 storeView.TwoFactorVerifyButton,
                 storeView.AppleAccountScrollViewer,
                 "two-factor verification action");
+            if (storeView.TwoFactorBackButton.ActualWidth < 64 ||
+                storeView.TwoFactorVerifyButton.ActualWidth < 160 ||
+                storeView.TwoFactorVerifyButton.ActualWidth <
+                storeView.TwoFactorBackButton.ActualWidth + 90)
+            {
+                throw new InvalidOperationException(
+                    "The two-factor actions do not reserve enough width for the complete verification label. " +
+                    $"Back: {storeView.TwoFactorBackButton.ActualWidth:0.#}; " +
+                    $"Verify: {storeView.TwoFactorVerifyButton.ActualWidth:0.#}.");
+            }
+
+            if (storeView.StoreSearchButton.IsEnabled ||
+                !string.Equals(
+                    storeView.StoreSearchButton.ToolTip as string,
+                    "Finish Apple verification before searching.",
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "The disabled App Store search action does not explain its pending Apple verification prerequisite.");
+            }
 
             mainViewModel.Store.TwoFactorCode = "12";
             storeView.TwoFactorCodeBox.SelectAll();
